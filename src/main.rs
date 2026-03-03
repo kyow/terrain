@@ -27,15 +27,18 @@ struct Cli {
 
 #[derive(Deserialize, JsonSchema)]
 struct SearchParams {
-    /// Search query string
+    /// The search query string. You can specify multiple keywords separated by spaces.
+    /// Japanese text is fully supported and accurately tokenized using morphological analysis.
     query: String,
-    /// Maximum number of results (default: 20)
+    /// The maximum number of search results to return (default: 20).
+    /// Keep this reasonable to avoid overflowing your context window.
     limit: Option<usize>,
 }
 
 #[derive(Deserialize, JsonSchema)]
 struct ReadFileParams {
-    /// Path of the file to read
+    /// The absolute path of the Markdown file to read.
+    /// You must use the exact path returned by the 'search' tool.
     path: String,
 }
 
@@ -54,11 +57,11 @@ struct TerrainServer {
 impl TerrainServer {
     /// Search indexed Markdown files and return matching file paths, scores,
     /// and snippets.
-    #[tool(name = "search", description = "Search indexed Markdown files by query")]
-    async fn search(
-        &self,
-        Parameters(params): Parameters<SearchParams>,
-    ) -> Result<String, String> {
+    #[tool(
+        name = "search",
+        description = "Search local Markdown files (knowledge base) using full-text search. This engine is highly optimized for Japanese text using morphological analysis, so you can confidently pass natural Japanese keywords, phrases, or technical terms. Use this as your first action to find relevant context to answer the user's question. It returns a list of matching absolute file paths, relevance scores, and surrounding text snippets."
+    )]
+    async fn search(&self, Parameters(params): Parameters<SearchParams>) -> Result<String, String> {
         let options = SearchOptions {
             limit: params.limit.unwrap_or(20),
             snippet: Some(SnippetOptions::default()),
@@ -85,7 +88,7 @@ impl TerrainServer {
     /// Read the contents of a file within the indexed directory.
     #[tool(
         name = "read_file",
-        description = "Read the full contents of a Markdown file by its path"
+        description = "Read the full contents of a specific Markdown file. Use this when you find a promising snippet from the 'search' tool and need more detailed context, full sections, or complete code blocks. Provide the exact absolute file path retrieved from the search results."
     )]
     async fn read_file(
         &self,
@@ -156,8 +159,8 @@ async fn main() -> Result<()> {
 }
 
 fn resolve_dir(dir: &Path) -> Result<PathBuf> {
-    let canonical = fs::canonicalize(dir)
-        .with_context(|| format!("directory not found: {}", dir.display()))?;
+    let canonical =
+        fs::canonicalize(dir).with_context(|| format!("directory not found: {}", dir.display()))?;
 
     if !canonical.is_dir() {
         bail!("not a directory: {}", canonical.display());
