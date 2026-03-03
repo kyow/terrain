@@ -1,10 +1,16 @@
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
-use rmcp::{ServerHandler, ServiceExt, model::ServerInfo, transport::stdio};
-use traverze::Traverze;
+use rmcp::handler::server::tool::ToolRouter;
+use rmcp::handler::server::wrapper::Parameters;
+use rmcp::model::{ServerCapabilities, ServerInfo};
+use rmcp::{ServerHandler, ServiceExt, tool, tool_handler, tool_router, transport::stdio};
+use schemars::JsonSchema;
+use serde::Deserialize;
+use traverze::{SearchOptions, SnippetOptions, TokenizerMode, Traverze};
 
 /// terrain MCP server – Markdown full-text search
 #[derive(Parser)]
@@ -15,17 +21,113 @@ struct Cli {
     dir: PathBuf,
 }
 
-#[derive(Clone, Default)]
-struct TerrainServer;
+// ---------------------------------------------------------------------------
+// MCP Tool parameters
+// ---------------------------------------------------------------------------
 
+#[derive(Deserialize, JsonSchema)]
+struct SearchParams {
+    /// Search query string
+    query: String,
+    /// Maximum number of results (default: 20)
+    limit: Option<usize>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct ReadFileParams {
+    /// Path of the file to read
+    path: String,
+}
+
+// ---------------------------------------------------------------------------
+// TerrainServer
+// ---------------------------------------------------------------------------
+
+#[derive(Clone)]
+struct TerrainServer {
+    engine: Traverze,
+    base_dir: PathBuf,
+    tool_router: ToolRouter<Self>,
+}
+
+#[tool_router]
+impl TerrainServer {
+    /// Search indexed Markdown files and return matching file paths, scores,
+    /// and snippets.
+    #[tool(name = "search", description = "Search indexed Markdown files by query")]
+    async fn search(
+        &self,
+        Parameters(params): Parameters<SearchParams>,
+    ) -> Result<String, String> {
+        let options = SearchOptions {
+            limit: params.limit.unwrap_or(20),
+            snippet: Some(SnippetOptions::default()),
+        };
+        let hits = self
+            .engine
+            .search_with_options(&params.query, options)
+            .map_err(|e| format!("search failed: {e}"))?;
+
+        let results: Vec<serde_json::Value> = hits
+            .iter()
+            .map(|h| {
+                serde_json::json!({
+                    "path": h.path,
+                    "score": h.score,
+                    "snippet": h.snippet,
+                })
+            })
+            .collect();
+
+        serde_json::to_string_pretty(&results).map_err(|e| format!("serialization failed: {e}"))
+    }
+
+    /// Read the contents of a file within the indexed directory.
+    #[tool(
+        name = "read_file",
+        description = "Read the full contents of a Markdown file by its path"
+    )]
+    async fn read_file(
+        &self,
+        Parameters(params): Parameters<ReadFileParams>,
+    ) -> Result<String, String> {
+        let canonical = fs::canonicalize(&params.path)
+            .map_err(|e| format!("file not found: {}: {e}", params.path))?;
+
+        if !canonical.starts_with(&self.base_dir) {
+            return Err("access denied: path is outside the indexed directory".to_string());
+        }
+
+        fs::read_to_string(&canonical).map_err(|e| format!("failed to read file: {e}"))
+    }
+}
+
+#[tool_handler]
 impl ServerHandler for TerrainServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
-            instructions: Some("terrain MCP server".to_string()),
+            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            instructions: Some(
+                "terrain MCP server – search and read indexed Markdown files".to_string(),
+            ),
             ..Default::default()
         }
     }
 }
+
+impl TerrainServer {
+    fn new(engine: Traverze, base_dir: PathBuf) -> Self {
+        Self {
+            engine,
+            base_dir,
+            tool_router: Self::tool_router(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// main
+// ---------------------------------------------------------------------------
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -33,7 +135,9 @@ async fn main() -> Result<()> {
     let target_dir = resolve_dir(&cli.dir)?;
     let markdown_files = collect_markdown_files(&target_dir)?;
 
-    let engine = Traverze::new().context("traverze index initialization failed")?;
+    let index_dir = env::temp_dir().join("terrain-index");
+    let engine = Traverze::new_in_dir_for_indexing(&index_dir, TokenizerMode::LinderaIpadic, true)
+        .context("traverze index initialization failed")?;
     let indexed = engine
         .index_files(&markdown_files)
         .context("failed to index markdown files")?;
@@ -44,8 +148,9 @@ async fn main() -> Result<()> {
         target_dir.display()
     );
 
-    let server: rmcp::service::RunningService<rmcp::RoleServer, TerrainServer> =
-        TerrainServer.serve(stdio()).await?;
+    let server = TerrainServer::new(engine, target_dir)
+        .serve(stdio())
+        .await?;
     server.waiting().await?;
     Ok(())
 }

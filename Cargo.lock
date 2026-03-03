@@ -2676,6 +2676,9 @@ dependencies = [
  "anyhow",
  "clap",
  "rmcp",
+ "schemars",
+ "serde",
+ "serde_json",
  "tokio",
  "traverze",
 ]
