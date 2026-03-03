@@ -2674,6 +2674,7 @@ name = "terrain"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "rmcp",
  "tokio",
  "traverze",

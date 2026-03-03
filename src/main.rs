@@ -1,10 +1,19 @@
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use clap::Parser;
 use rmcp::{ServerHandler, ServiceExt, model::ServerInfo, transport::stdio};
 use traverze::Traverze;
+
+/// terrain MCP server – Markdown full-text search
+#[derive(Parser)]
+#[command(version)]
+struct Cli {
+    /// Path to the directory containing Markdown files
+    #[arg(long)]
+    dir: PathBuf,
+}
 
 #[derive(Clone, Default)]
 struct TerrainServer;
@@ -20,7 +29,8 @@ impl ServerHandler for TerrainServer {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let target_dir = parse_dir_arg()?;
+    let cli = Cli::parse();
+    let target_dir = resolve_dir(&cli.dir)?;
     let markdown_files = collect_markdown_files(&target_dir)?;
 
     let engine = Traverze::new().context("traverze index initialization failed")?;
@@ -40,26 +50,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn parse_dir_arg() -> Result<PathBuf> {
-    let mut args = env::args().skip(1);
-    let mut dir: Option<PathBuf> = None;
-
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--dir" => {
-                let value = args
-                    .next()
-                    .context("missing value for --dir. usage: terrain --dir <DIR PATH>")?;
-                dir = Some(PathBuf::from(value));
-            }
-            other => {
-                bail!("unknown argument: {other}. usage: terrain --dir <DIR PATH>");
-            }
-        }
-    }
-
-    let dir = dir.context("missing --dir argument. usage: terrain --dir <DIR PATH>")?;
-    let canonical = fs::canonicalize(&dir)
+fn resolve_dir(dir: &Path) -> Result<PathBuf> {
+    let canonical = fs::canonicalize(dir)
         .with_context(|| format!("directory not found: {}", dir.display()))?;
 
     if !canonical.is_dir() {

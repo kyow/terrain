@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
+clap = { version = "4", features = ["derive"] }
 rmcp = { version = "0.17.0", features = ["server", "transport-io"] }
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
 traverze = { version = "0.2.0", features = ["tokenizer-lindera-ipadic"] }
