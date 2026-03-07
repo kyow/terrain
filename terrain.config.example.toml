@@ -1,0 +1,15 @@
+# terrain MCP server configuration
+#
+# Customize the descriptions sent to the AI model.
+# All fields are optional — omitted fields use the built-in defaults.
+#
+# Usage: terrain --dir ./docs --config terrain.config.toml
+
+# Server-level instruction provided to the AI model.
+instructions = "terrain MCP server – search and read indexed Markdown files"
+
+# Description for the "search" tool.
+search_description = "Search local Markdown files (knowledge base) using full-text search. This engine is highly optimized for Japanese text using morphological analysis, so you can confidently pass natural Japanese keywords, phrases, or technical terms. Use this as your first action to find relevant context to answer the user's question. It returns a list of matching absolute file paths, relevance scores, and surrounding text snippets."
+
+# Description for the "read_file" tool.
+read_file_description = "Read the full contents of a specific Markdown file. Use this when you find a promising snippet from the 'search' tool and need more detailed context, full sections, or complete code blocks. Provide the exact absolute file path retrieved from the search results."
