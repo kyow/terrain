@@ -19,6 +19,30 @@ struct Cli {
     /// Path to the directory containing Markdown files
     #[arg(long)]
     dir: PathBuf,
+    /// Path to a TOML config file for customizing tool descriptions
+    #[arg(long)]
+    config: Option<PathBuf>,
+}
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Config {
+    instructions: Option<String>,
+    search_description: Option<String>,
+    read_file_description: Option<String>,
+}
+
+impl Config {
+    fn load(path: &Path) -> Result<Self> {
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("failed to read config file: {}", path.display()))?;
+        toml::from_str(&content)
+            .with_context(|| format!("failed to parse config file: {}", path.display()))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +75,7 @@ struct TerrainServer {
     engine: Traverze,
     base_dir: PathBuf,
     tool_router: ToolRouter<Self>,
+    instructions: String,
 }
 
 #[tool_router]
@@ -110,20 +135,39 @@ impl ServerHandler for TerrainServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
-            instructions: Some(
-                "terrain MCP server – search and read indexed Markdown files".to_string(),
-            ),
+            instructions: Some(self.instructions.clone()),
             ..Default::default()
         }
     }
 }
 
 impl TerrainServer {
-    fn new(engine: Traverze, base_dir: PathBuf) -> Self {
+    fn new(engine: Traverze, base_dir: PathBuf, config: &Config) -> Self {
+        let mut router = Self::tool_router();
+
+        if let Some(desc) = &config.search_description {
+            if let Some(route) = router.map.get_mut("search") {
+                route.attr.description = Some(desc.clone().into());
+            }
+        }
+        if let Some(desc) = &config.read_file_description {
+            if let Some(route) = router.map.get_mut("read_file") {
+                route.attr.description = Some(desc.clone().into());
+            }
+        }
+
+        let instructions = config
+            .instructions
+            .clone()
+            .unwrap_or_else(|| {
+                "terrain MCP server – search and read indexed Markdown files".to_string()
+            });
+
         Self {
             engine,
             base_dir,
-            tool_router: Self::tool_router(),
+            tool_router: router,
+            instructions,
         }
     }
 }
@@ -136,6 +180,10 @@ impl TerrainServer {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     let target_dir = resolve_dir(&cli.dir)?;
+    let config = match &cli.config {
+        Some(path) => Config::load(path)?,
+        None => Config::default(),
+    };
     let markdown_files = collect_markdown_files(&target_dir)?;
 
     let index_dir = env::temp_dir().join("terrain-index");
@@ -151,7 +199,7 @@ async fn main() -> Result<()> {
         target_dir.display()
     );
 
-    let server = TerrainServer::new(engine, target_dir)
+    let server = TerrainServer::new(engine, target_dir, &config)
         .serve(stdio())
         .await?;
     server.waiting().await?;
