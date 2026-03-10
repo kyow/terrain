@@ -1,0 +1,81 @@
+# terrain
+
+`terrain` is a high-performance, local-first full-text search engine for your Markdown knowledge base, optimized for Japanese text.
+
+It runs as a command-line MCP (Model Context Protocol) server, indexing a specified directory of `.md` files and exposing powerful search and retrieval tools.
+
+## Features
+
+- **Blazing-Fast Search:** Powered by the `traverze` search engine.
+- **Optimized for Japanese:** Utilizes `Lindera` with an IPADIC dictionary for accurate morphological analysis and tokenization of Japanese text.
+- **MCP Server:** Exposes a simple, machine-readable tool interface over standard I/O.
+- **Secure:** File access is restricted to the indexed directory to prevent unauthorized access.
+- **Cross-Platform:** Built with Rust, runs on Windows, macOS, and Linux.
+
+## Usage
+
+1.  **Start the server:**
+    Run the program from your terminal, pointing it to the directory containing your Markdown files.
+
+    ```bash
+    terrain --dir /path/to/your/notes
+    ```
+
+2.  **Indexing:**
+    The server will first index all Markdown files in the specified directory. You will see a message indicating how many files have been indexed.
+
+    ```
+    indexed 1234 markdown files from /path/to/your/notes
+    ```
+
+3.  **Interact via MCP:**
+    Once indexed, the server listens on `stdin` for MCP JSON requests and sends responses to `stdout`. You can use this interface with any MCP-compatible client or controller.
+
+## Building
+
+To build the project from the source, you need to have Rust installed.
+
+1.  Clone the repository:
+    ```bash
+    git clone <repository-url>
+    cd terrain
+    ```
+
+2.  Build the project:
+    ```bash
+    cargo build --release
+    ```
+    The executable will be located at `target/release/terrain`.
+
+## MCP Tools
+
+The server provides the following tools:
+
+### `search`
+
+Search indexed Markdown files and return matching file paths, scores, and snippets.
+
+- **Description:** This tool is highly optimized for Japanese text. Use it to find relevant context to answer a user's question. It returns a list of matching absolute file paths, relevance scores, and surrounding text snippets.
+- **Parameters:**
+    - `query` (string, required): The search query. You can specify multiple keywords separated by spaces.
+    - `limit` (integer, optional): The maximum number of search results to return (default: 20).
+- **Example Return Value:**
+    ```json
+    [
+      {
+        "path": "/path/to/your/notes/example.md",
+        "score": 18.72,
+        "snippet": "This is a snippet of text surrounding the matched keyword."
+      }
+    ]
+    ```
+
+### `read_file`
+
+Read the full contents of a specific Markdown file.
+
+- **Description:** Use this when you find a promising snippet from the `search` tool and need more detailed context. Provide the exact absolute file path retrieved from the search results.
+- **Parameters:**
+    - `path` (string, required): The absolute path of the Markdown file to read. You must use the exact path returned by the `search` tool.
+- **Example Return Value:**
+    The full, raw content of the specified Markdown file.
