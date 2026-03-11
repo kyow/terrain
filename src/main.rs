@@ -29,8 +29,8 @@ async fn main() -> Result<()> {
     let markdown_files = collect_markdown_files(&target_dir)?;
 
     let index_dir = env::temp_dir().join("terrain-index");
-    let (engine, indexed) = build_engine(&index_dir, &markdown_files)
-        .context("failed to build search engine")?;
+    let (engine, indexed) =
+        build_engine(&index_dir, &markdown_files).context("failed to build search engine")?;
 
     eprintln!(
         "indexed {} markdown files from {}",

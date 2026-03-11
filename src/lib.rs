@@ -142,12 +142,9 @@ impl TerrainServer {
             }
         }
 
-        let instructions = config
-            .instructions
-            .clone()
-            .unwrap_or_else(|| {
-                "terrain MCP server – search and read indexed Markdown files".to_string()
-            });
+        let instructions = config.instructions.clone().unwrap_or_else(|| {
+            "terrain MCP server – search and read indexed Markdown files".to_string()
+        });
 
         Self {
             engine,
@@ -207,9 +204,8 @@ pub fn collect_markdown_files(base_dir: &Path) -> Result<Vec<PathBuf>> {
 
 /// Create a `Traverze` engine and index the given Markdown files.
 pub fn build_engine(index_dir: &Path, files: &[PathBuf]) -> Result<(Traverze, usize)> {
-    let engine =
-        Traverze::new_in_dir_for_indexing(index_dir, TokenizerMode::LinderaIpadic, true)
-            .context("traverze index initialization failed")?;
+    let engine = Traverze::new_in_dir_for_indexing(index_dir, TokenizerMode::LinderaIpadic, true)
+        .context("traverze index initialization failed")?;
     let indexed = engine
         .index_files(files)
         .context("failed to index markdown files")?;
