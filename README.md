@@ -47,6 +47,31 @@ To build the project from the source, you need to have Rust installed.
     ```
     The executable will be located at `target/release/terrain`.
 
+## Using as a Library
+
+`terrain` can also be used as a Rust library crate by disabling the default `cli` feature:
+
+```toml
+[dependencies]
+terrain = { git = "<repository-url>", default-features = false }
+```
+
+The library exposes the following public API:
+
+- `Config` — Load and parse a TOML configuration file.
+- `TerrainServer` — The MCP server handler, ready to be plugged into an `rmcp` transport.
+- `resolve_dir` / `collect_markdown_files` / `build_engine` — Utility functions for directory resolution, Markdown file collection, and search engine initialization.
+
+## Configuration
+
+In MCP, tool descriptions directly influence how the AI model decides when and how to use each tool. You can customize these descriptions to better suit your use case by providing a TOML configuration file.
+
+```bash
+terrain --dir /path/to/your/notes --config terrain.config.toml
+```
+
+See [terrain.config.example.toml](terrain.config.example.toml) for all available options.
+
 ## MCP Tools
 
 The server provides the following tools:
