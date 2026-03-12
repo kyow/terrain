@@ -48,25 +48,19 @@ To use `terrain` with an MCP-compatible client such as Claude Desktop, add the f
 
 If you built from source without `cargo install`, use the full path to the executable instead (e.g., `"/path/to/terrain"`).
 
-## Building
+## Installation
 
-To build the project from the source, you need to have Rust installed.
+You need to have [Rust](https://www.rust-lang.org/tools/install) installed.
 
-1.  Clone the repository:
-    ```bash
-    git clone <repository-url>
-    cd terrain
-    ```
+### As a CLI tool
 
-2.  Build the project:
-    ```bash
-    cargo build --release
-    ```
-    The executable will be located at `target/release/terrain`.
+```bash
+cargo install --git <repository-url>
+```
 
-## Using as a Library
+### As a library
 
-`terrain` can also be used as a Rust library crate by disabling the default `cli` feature:
+Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
