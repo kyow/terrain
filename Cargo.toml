@@ -3,9 +3,17 @@ name = "terrain"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "terrain"
+required-features = ["cli"]
+
+[features]
+default = ["cli"]
+cli = ["dep:clap"]
+
 [dependencies]
 anyhow = "1.0"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"], optional = true }
 rmcp = { version = "0.17.0", features = ["server", "transport-io"] }
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
