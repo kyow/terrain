@@ -31,6 +31,23 @@ It runs as a command-line MCP (Model Context Protocol) server, indexing a specif
 3.  **Interact via MCP:**
     Once indexed, the server listens on `stdin` for MCP JSON requests and sends responses to `stdout`. You can use this interface with any MCP-compatible client or controller.
 
+## MCP Client Setup
+
+To use `terrain` with an MCP-compatible client such as Claude Desktop, add the following to your client's configuration file (e.g., `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "terrain": {
+      "command": "terrain",
+      "args": ["--dir", "/path/to/your/notes"]
+    }
+  }
+}
+```
+
+If you built from source without `cargo install`, use the full path to the executable instead (e.g., `"/path/to/terrain"`).
+
 ## Building
 
 To build the project from the source, you need to have Rust installed.
