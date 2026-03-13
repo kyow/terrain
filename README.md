@@ -1,16 +1,59 @@
 # terrain
 
-`terrain` is a high-performance, local-first full-text search engine for your Markdown knowledge base, optimized for Japanese text.
+`terrain` is a lightweight, configurable, local-first full-text search engine for your Markdown knowledge base, with built-in support for Japanese text.
 
-It runs as a command-line MCP (Model Context Protocol) server, indexing a specified directory of `.md` files and exposing powerful search and retrieval tools.
+It runs as a command-line MCP (Model Context Protocol) server, indexing a specified directory of `.md` files and exposing search and retrieval tools.
 
 ## Features
 
-- **Blazing-Fast Search:** Powered by the `traverze` search engine.
-- **Optimized for Japanese:** Utilizes `Lindera` with an IPADIC dictionary for accurate morphological analysis and tokenization of Japanese text.
+- **Full-Text Search:** Powered by the `traverze` search engine, built on `tantivy`.
+- **Japanese Support:** Utilizes `lindera` with an IPADIC dictionary for accurate morphological analysis and tokenization of Japanese text.
 - **MCP Server:** Exposes a simple, machine-readable tool interface over standard I/O.
 - **Secure:** File access is restricted to the indexed directory to prevent unauthorized access.
+- **Configurable:** Customize tool descriptions via a TOML configuration file to tailor AI model behavior.
 - **Cross-Platform:** Built with Rust, runs on Windows, macOS, and Linux.
+
+## Installation
+
+You need to have [Rust](https://www.rust-lang.org/tools/install) installed.
+
+### As a CLI tool
+
+```bash
+cargo install --git <repository-url>
+```
+
+### As a library
+
+Add the following to your `Cargo.toml`:
+
+```toml
+[dependencies]
+terrain = { git = "<repository-url>", default-features = false }
+```
+
+The library exposes the following public API:
+
+- `Config` — Load and parse a TOML configuration file.
+- `TerrainServer` — The MCP server handler, ready to be plugged into an `rmcp` transport.
+- `resolve_dir` / `collect_markdown_files` / `build_engine` — Utility functions for directory resolution, Markdown file collection, and search engine initialization.
+
+## MCP Client Setup
+
+To use `terrain` with an MCP-compatible client such as Claude Desktop, add the following to your client's configuration file (e.g., `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "terrain": {
+      "command": "terrain",
+      "args": ["--dir", "/path/to/your/notes"]
+    }
+  }
+}
+```
+
+If you built from source without `cargo install`, use the full path to the executable instead (e.g., `"/path/to/terrain"`).
 
 ## Usage
 
@@ -31,21 +74,15 @@ It runs as a command-line MCP (Model Context Protocol) server, indexing a specif
 3.  **Interact via MCP:**
     Once indexed, the server listens on `stdin` for MCP JSON requests and sends responses to `stdout`. You can use this interface with any MCP-compatible client or controller.
 
-## Building
+## Configuration
 
-To build the project from the source, you need to have Rust installed.
+In MCP, tool descriptions directly influence how the AI model decides when and how to use each tool. You can customize these descriptions to better suit your use case by providing a TOML configuration file.
 
-1.  Clone the repository:
-    ```bash
-    git clone <repository-url>
-    cd terrain
-    ```
+```bash
+terrain --dir /path/to/your/notes --config terrain.config.toml
+```
 
-2.  Build the project:
-    ```bash
-    cargo build --release
-    ```
-    The executable will be located at `target/release/terrain`.
+See [terrain.config.example.toml](terrain.config.example.toml) for all available options.
 
 ## MCP Tools
 
