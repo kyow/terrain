@@ -1,6 +1,6 @@
 # terrain
 
-`terrain` is a lightweight, local-first full-text search engine for your Markdown knowledge base, with built-in support for Japanese text.
+`terrain` is a lightweight, configurable, local-first full-text search engine for your Markdown knowledge base, with built-in support for Japanese text.
 
 It runs as a command-line MCP (Model Context Protocol) server, indexing a specified directory of `.md` files and exposing search and retrieval tools.
 
@@ -10,6 +10,7 @@ It runs as a command-line MCP (Model Context Protocol) server, indexing a specif
 - **Japanese Support:** Utilizes `lindera` with an IPADIC dictionary for accurate morphological analysis and tokenization of Japanese text.
 - **MCP Server:** Exposes a simple, machine-readable tool interface over standard I/O.
 - **Secure:** File access is restricted to the indexed directory to prevent unauthorized access.
+- **Configurable:** Customize tool descriptions via a TOML configuration file to tailor AI model behavior.
 - **Cross-Platform:** Built with Rust, runs on Windows, macOS, and Linux.
 
 ## Installation
