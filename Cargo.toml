@@ -2,6 +2,13 @@
 name = "terrain"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+description = "A lightweight, configurable, local-first full-text search engine for Markdown knowledge bases with Japanese text support"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/kyow/terrain"
+readme = "README.md"
+keywords = ["search", "markdown", "mcp", "ai", "full-text-search"]
+categories = ["artificial-intelligence", "text-processing"]
 
 [[bin]]
 name = "terrain"

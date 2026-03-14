@@ -20,7 +20,7 @@ You need to have [Rust](https://www.rust-lang.org/tools/install) installed.
 ### As a CLI tool
 
 ```bash
-cargo install --git <repository-url>
+cargo install terrain
 ```
 
 ### As a library
@@ -29,7 +29,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-terrain = { git = "<repository-url>", default-features = false }
+terrain = { version = "0.1.0", default-features = false }
 ```
 
 The library exposes the following public API:
@@ -116,3 +116,12 @@ Read the full contents of a specific Markdown file.
     - `path` (string, required): The absolute path of the Markdown file to read. You must use the exact path returned by the `search` tool.
 - **Example Return Value:**
     The full, raw content of the specified Markdown file.
+
+## License
+
+Licensed under either of
+
+- [Apache License, Version 2.0](LICENSE-APACHE)
+- [MIT License](LICENSE-MIT)
+
+at your option.
