@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
         target_dir.display()
     );
 
-    let server = TerrainServer::new(engine, target_dir, &config)
+    let server = TerrainServer::new(engine, target_dir, &config, indexed)
         .serve(stdio())
         .await?;
     server.waiting().await?;
