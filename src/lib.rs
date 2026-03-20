@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -267,44 +268,72 @@ pub fn start_watcher(engine: Traverze, base_dir: PathBuf) -> Result<RecommendedW
 
     tokio::spawn(async move {
         tokio::task::spawn_blocking(move || {
-            while let Ok(event) = rx.recv() {
-                let md_paths: Vec<PathBuf> = event
-                    .paths
-                    .into_iter()
-                    .filter(|p| is_markdown(p))
-                    .collect();
+            let debounce = Duration::from_millis(500);
+            let mut pending: HashMap<PathBuf, EventKind> = HashMap::new();
 
-                if md_paths.is_empty() {
-                    continue;
+            loop {
+                // Wait for the first event (blocking).
+                let event = match rx.recv() {
+                    Ok(e) => e,
+                    Err(_) => break,
+                };
+                accumulate(&mut pending, &event);
+
+                // Drain further events until the channel is quiet for `debounce`.
+                loop {
+                    match rx.recv_timeout(debounce) {
+                        Ok(e) => accumulate(&mut pending, &e),
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => break,
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
                 }
 
-                match event.kind {
-                    EventKind::Create(_) => {
-                        match engine.index_files(&md_paths) {
-                            Ok(n) => eprintln!("watcher: indexed {} new file(s)", n),
-                            Err(e) => eprintln!("watcher: index error: {e}"),
-                        }
+                // Process batched events.
+                let to_index: Vec<PathBuf> = pending
+                    .iter()
+                    .filter(|(_, kind)| {
+                        matches!(kind, EventKind::Create(_) | EventKind::Modify(_))
+                    })
+                    .map(|(path, _)| path.clone())
+                    .collect();
+
+                let to_remove: Vec<PathBuf> = pending
+                    .iter()
+                    .filter(|(_, kind)| matches!(kind, EventKind::Remove(_)))
+                    .map(|(path, _)| path.clone())
+                    .collect();
+
+                pending.clear();
+
+                if !to_remove.is_empty() {
+                    match engine.remove_files(&to_remove) {
+                        Ok(n) => eprintln!("watcher: removed {} file(s) from index", n),
+                        Err(e) => eprintln!("watcher: remove error: {e}"),
                     }
-                    EventKind::Modify(_) => {
-                        let _ = engine.remove_files(&md_paths);
-                        match engine.index_files(&md_paths) {
-                            Ok(n) => eprintln!("watcher: re-indexed {} file(s)", n),
-                            Err(e) => eprintln!("watcher: re-index error: {e}"),
-                        }
+                }
+
+                if !to_index.is_empty() {
+                    let _ = engine.remove_files(&to_index);
+                    match engine.index_files(&to_index) {
+                        Ok(n) => eprintln!("watcher: re-indexed {} file(s)", n),
+                        Err(e) => eprintln!("watcher: re-index error: {e}"),
                     }
-                    EventKind::Remove(_) => {
-                        match engine.remove_files(&md_paths) {
-                            Ok(n) => eprintln!("watcher: removed {} file(s) from index", n),
-                            Err(e) => eprintln!("watcher: remove error: {e}"),
-                        }
-                    }
-                    _ => {}
                 }
             }
         });
     });
 
     Ok(watcher)
+}
+
+/// Accumulate file-system events into `pending`, keeping only the latest
+/// [`EventKind`] per path and filtering to Markdown files.
+fn accumulate(pending: &mut HashMap<PathBuf, EventKind>, event: &notify::Event) {
+    for path in &event.paths {
+        if is_markdown(path) {
+            pending.insert(path.clone(), event.kind.clone());
+        }
+    }
 }
 
 fn is_markdown(path: &Path) -> bool {
