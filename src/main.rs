@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Parser;
 use rmcp::{ServiceExt, transport::stdio};
-use terrain::{Config, TerrainServer, build_engine, collect_markdown_files, resolve_dir};
+use terrain::{Config, TerrainServer, build_engine, collect_markdown_files, resolve_dir, start_watcher};
 
 /// terrain MCP server – Markdown full-text search
 #[derive(Parser)]
@@ -37,6 +37,10 @@ async fn main() -> Result<()> {
         indexed,
         target_dir.display()
     );
+
+    let _watcher = start_watcher(engine.clone(), target_dir.clone())
+        .context("failed to start file watcher")?;
+    eprintln!("watching {} for changes", target_dir.display());
 
     let server = TerrainServer::new(engine, target_dir, &config, indexed)
         .serve(stdio())

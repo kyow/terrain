@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{LoggingLevel, LoggingMessageNotificationParam, ServerCapabilities, ServerInfo};
@@ -240,4 +242,74 @@ pub fn build_engine(index_dir: &Path, files: &[PathBuf]) -> Result<(Traverze, us
         .index_files(files)
         .context("failed to index markdown files")?;
     Ok((engine, indexed))
+}
+
+/// Start watching the directory for file changes and update the index accordingly.
+///
+/// Returns the [`RecommendedWatcher`] handle. The watcher stops when this
+/// handle is dropped, so keep it alive for the lifetime of the server.
+pub fn start_watcher(engine: Traverze, base_dir: PathBuf) -> Result<RecommendedWatcher> {
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    let mut watcher = RecommendedWatcher::new(
+        move |res: std::result::Result<notify::Event, notify::Error>| {
+            if let Ok(event) = res {
+                let _ = tx.send(event);
+            }
+        },
+        notify::Config::default().with_poll_interval(Duration::from_secs(2)),
+    )
+    .context("failed to create file watcher")?;
+
+    watcher
+        .watch(base_dir.as_ref(), RecursiveMode::Recursive)
+        .with_context(|| format!("failed to watch directory: {}", base_dir.display()))?;
+
+    tokio::spawn(async move {
+        tokio::task::spawn_blocking(move || {
+            while let Ok(event) = rx.recv() {
+                let md_paths: Vec<PathBuf> = event
+                    .paths
+                    .into_iter()
+                    .filter(|p| is_markdown(p))
+                    .collect();
+
+                if md_paths.is_empty() {
+                    continue;
+                }
+
+                match event.kind {
+                    EventKind::Create(_) => {
+                        match engine.index_files(&md_paths) {
+                            Ok(n) => eprintln!("watcher: indexed {} new file(s)", n),
+                            Err(e) => eprintln!("watcher: index error: {e}"),
+                        }
+                    }
+                    EventKind::Modify(_) => {
+                        let _ = engine.remove_files(&md_paths);
+                        match engine.index_files(&md_paths) {
+                            Ok(n) => eprintln!("watcher: re-indexed {} file(s)", n),
+                            Err(e) => eprintln!("watcher: re-index error: {e}"),
+                        }
+                    }
+                    EventKind::Remove(_) => {
+                        match engine.remove_files(&md_paths) {
+                            Ok(n) => eprintln!("watcher: removed {} file(s) from index", n),
+                            Err(e) => eprintln!("watcher: remove error: {e}"),
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+    });
+
+    Ok(watcher)
+}
+
+fn is_markdown(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("md"))
+        .unwrap_or(false)
 }
