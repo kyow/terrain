@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use notify::event::{CreateKind, RemoveKind, RenameMode};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -328,10 +329,65 @@ pub fn start_watcher(engine: Traverze, base_dir: PathBuf) -> Result<RecommendedW
 
 /// Accumulate file-system events into `pending`, keeping only the latest
 /// [`EventKind`] per path and filtering to Markdown files.
+///
+/// Rename events are normalised into Remove / Create so that the processing
+/// loop does not need to know about renames.
 fn accumulate(pending: &mut HashMap<PathBuf, EventKind>, event: &notify::Event) {
-    for path in &event.paths {
-        if is_markdown(path) {
-            pending.insert(path.clone(), event.kind.clone());
+    match &event.kind {
+        EventKind::Modify(notify::event::ModifyKind::Name(mode)) => {
+            match mode {
+                // "From" carries the old path → treat as removal.
+                RenameMode::From => {
+                    if let Some(old) = event.paths.first() {
+                        if is_markdown(old) {
+                            pending.insert(old.clone(), EventKind::Remove(RemoveKind::File));
+                        }
+                    }
+                }
+                // "To" carries the new path → treat as creation.
+                RenameMode::To => {
+                    if let Some(new) = event.paths.first() {
+                        if is_markdown(new) {
+                            pending.insert(new.clone(), EventKind::Create(CreateKind::File));
+                        }
+                    }
+                }
+                // "Both" carries [old, new] in a single event.
+                RenameMode::Both => {
+                    if let Some(old) = event.paths.first() {
+                        if is_markdown(old) {
+                            pending.insert(old.clone(), EventKind::Remove(RemoveKind::File));
+                        }
+                    }
+                    if let Some(new) = event.paths.get(1) {
+                        if is_markdown(new) {
+                            pending.insert(new.clone(), EventKind::Create(CreateKind::File));
+                        }
+                    }
+                }
+                // "Any" / "Other" – direction unknown. If the file exists now
+                // treat it as a creation; otherwise as a removal.
+                _ => {
+                    for path in &event.paths {
+                        if is_markdown(path) {
+                            let kind = if path.exists() {
+                                EventKind::Create(CreateKind::File)
+                            } else {
+                                EventKind::Remove(RemoveKind::File)
+                            };
+                            pending.insert(path.clone(), kind);
+                        }
+                    }
+                }
+            }
+        }
+        // Non-rename events: pass through as-is.
+        _ => {
+            for path in &event.paths {
+                if is_markdown(path) {
+                    pending.insert(path.clone(), event.kind.clone());
+                }
+            }
         }
     }
 }
