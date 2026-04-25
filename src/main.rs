@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
         .context("failed to start file watcher")?;
     eprintln!("watching {} for changes", target_dir.display());
 
-    let server = TerrainServer::new(engine, indexed_paths, &config, indexed)
+    let server = TerrainServer::new(engine, indexed_paths, &config)
         .serve(stdio())
         .await?;
     server.waiting().await?;
