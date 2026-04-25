@@ -9,7 +9,7 @@ It runs as a command-line MCP (Model Context Protocol) server, indexing a specif
 - **Full-Text Search:** Powered by the `traverze` search engine, built on `tantivy`.
 - **Japanese Support:** Utilizes `lindera` with an IPADIC dictionary for accurate morphological analysis and tokenization of Japanese text.
 - **MCP Server:** Exposes a simple, machine-readable tool interface over standard I/O.
-- **Secure:** File access is restricted to the indexed directory to prevent unauthorized access.
+- **Secure:** `read_file` only serves paths that have been registered in the index, so registration is the permission grant.
 - **Configurable:** Customize tool descriptions via a TOML configuration file to tailor AI model behavior.
 - **Cross-Platform:** Built with Rust, runs on Windows, macOS, and Linux.
 
@@ -32,11 +32,16 @@ Add the following to your `Cargo.toml`:
 terrain = { version = "0.1.0", default-features = false }
 ```
 
+Disabling default features drops the `clap` and `notify` dependencies that the CLI uses, leaving a lean library suitable for embedding.
+
 The library exposes the following public API:
 
 - `Config` — Load and parse a TOML configuration file.
-- `TerrainServer` — The MCP server handler, ready to be plugged into an `rmcp` transport.
-- `resolve_dir` / `collect_markdown_files` / `build_engine` — Utility functions for directory resolution, Markdown file collection, and search engine initialization.
+- `TerrainServer` — The MCP server handler, ready to be plugged into an `rmcp` transport. Constructed with `TerrainServer::new(engine, indexed_paths, &config)`.
+- `IndexedPaths` — A cloneable, shared set of paths currently registered in the index. `read_file` consults this set to authorize reads, so the embedding app controls access by registering paths.
+- `resolve_dir` / `build_engine` — Utility functions for directory resolution and search engine initialization.
+
+The library does not scan directories or watch the filesystem on its own — embedding apps decide which files to register and when to re-index. See [src/main.rs](src/main.rs) for a reference integration that walks a directory of `.md` files and keeps the index in sync via [`notify`](https://crates.io/crates/notify).
 
 ## MCP Client Setup
 

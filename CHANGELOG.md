@@ -12,7 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - File watcher to monitor directory changes and automatically update the index
 - Debounced event handling with batch processing for efficient indexing
 - Rename event normalization in file watcher
-- Logging of indexed document count when indexing is complete
+- `IndexedPaths` type to share the registered-path set between the library and embedding apps
+
+### Changed
+
+- `read_file` now authorizes access by checking whether the path is registered in the index, instead of requiring it to live under a fixed base directory
+- `TerrainServer::new` simplified to `(engine, indexed_paths, &config)`
+- File watcher and directory scanning moved out of the library into the CLI binary; embedding apps drive registration themselves
+- `notify` dependency moved behind the `cli` feature
+
+### Removed
+
+- `collect_markdown_files` and `start_watcher` from the library's public API
 
 ## [0.1.0] - 2026-03-15
 
