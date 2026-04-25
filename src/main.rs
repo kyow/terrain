@@ -9,7 +9,7 @@ use clap::Parser;
 use notify::event::{CreateKind, RemoveKind, RenameMode};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rmcp::{ServiceExt, transport::stdio};
-use terrain::{Config, TerrainServer, build_engine, resolve_dir};
+use terrain::{Config, IndexedPaths, TerrainServer, build_engine, resolve_dir};
 use traverze::Traverze;
 
 /// terrain MCP server – Markdown full-text search
@@ -38,17 +38,20 @@ async fn main() -> Result<()> {
     let (engine, indexed) =
         build_engine(&index_dir, &markdown_files).context("failed to build search engine")?;
 
+    let indexed_paths = IndexedPaths::new();
+    indexed_paths.extend(markdown_files);
+
     eprintln!(
         "indexed {} markdown files from {}",
         indexed,
         target_dir.display()
     );
 
-    let _watcher = start_watcher(engine.clone(), target_dir.clone())
+    let _watcher = start_watcher(engine.clone(), indexed_paths.clone(), target_dir.clone())
         .context("failed to start file watcher")?;
     eprintln!("watching {} for changes", target_dir.display());
 
-    let server = TerrainServer::new(engine, target_dir, &config, indexed)
+    let server = TerrainServer::new(engine, indexed_paths, &config, indexed)
         .serve(stdio())
         .await?;
     server.waiting().await?;
@@ -73,7 +76,15 @@ fn collect_markdown_files(base_dir: &Path) -> Result<Vec<PathBuf>> {
             }
 
             if file_type.is_file() && is_markdown(&path) {
-                files.push(path);
+                // Canonicalize so paths line up with `fs::canonicalize` lookups
+                // performed by `read_file`, which on Windows yields `\\?\` paths.
+                match fs::canonicalize(&path) {
+                    Ok(canonical) => files.push(canonical),
+                    Err(e) => eprintln!(
+                        "warning: skipping {} (canonicalize failed: {e})",
+                        path.display()
+                    ),
+                }
             }
         }
     }
@@ -85,7 +96,11 @@ fn collect_markdown_files(base_dir: &Path) -> Result<Vec<PathBuf>> {
 ///
 /// Returns the [`RecommendedWatcher`] handle. The watcher stops when this
 /// handle is dropped, so keep it alive for the lifetime of the server.
-fn start_watcher(engine: Traverze, base_dir: PathBuf) -> Result<RecommendedWatcher> {
+fn start_watcher(
+    engine: Traverze,
+    indexed_paths: IndexedPaths,
+    base_dir: PathBuf,
+) -> Result<RecommendedWatcher> {
     let (tx, rx) = std::sync::mpsc::channel();
 
     let mut watcher = RecommendedWatcher::new(
@@ -122,14 +137,19 @@ fn start_watcher(engine: Traverze, base_dir: PathBuf) -> Result<RecommendedWatch
                     }
                 }
 
+                // Adds: canonicalize so the stored form matches read_file lookups.
                 let to_index: Vec<PathBuf> = pending
                     .iter()
                     .filter(|(_, kind)| {
                         matches!(kind, EventKind::Create(_) | EventKind::Modify(_))
                     })
-                    .map(|(path, _)| path.clone())
+                    .filter_map(|(path, _)| fs::canonicalize(path).ok())
                     .collect();
 
+                // Removes: file is already gone, so canonicalize will fail.
+                // Use the literal path; IndexedPaths::remove may miss the
+                // canonical form but that only leaves a stale entry — read_file
+                // would still fail at the I/O step.
                 let to_remove: Vec<PathBuf> = pending
                     .iter()
                     .filter(|(_, kind)| matches!(kind, EventKind::Remove(_)))
@@ -139,6 +159,9 @@ fn start_watcher(engine: Traverze, base_dir: PathBuf) -> Result<RecommendedWatch
                 pending.clear();
 
                 if !to_remove.is_empty() {
+                    for path in &to_remove {
+                        indexed_paths.remove(path);
+                    }
                     match engine.remove_files(&to_remove) {
                         Ok(n) => eprintln!("watcher: removed {} file(s) from index", n),
                         Err(e) => eprintln!("watcher: remove error: {e}"),
@@ -148,7 +171,10 @@ fn start_watcher(engine: Traverze, base_dir: PathBuf) -> Result<RecommendedWatch
                 if !to_index.is_empty() {
                     let _ = engine.remove_files(&to_index);
                     match engine.index_files(&to_index) {
-                        Ok(n) => eprintln!("watcher: re-indexed {} file(s)", n),
+                        Ok(n) => {
+                            indexed_paths.extend(to_index.iter().cloned());
+                            eprintln!("watcher: re-indexed {} file(s)", n);
+                        }
                         Err(e) => eprintln!("watcher: re-index error: {e}"),
                     }
                 }
