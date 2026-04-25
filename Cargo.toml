@@ -16,7 +16,7 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-cli = ["dep:clap"]
+cli = ["dep:clap", "dep:notify"]
 
 [dependencies]
 anyhow = "1.0"
@@ -27,5 +27,5 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
 toml = "0.8"
-notify = "7"
+notify = { version = "7", optional = true }
 traverze = { version = "0.2.0", features = ["tokenizer-lindera-ipadic"] }
