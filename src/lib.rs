@@ -1,5 +1,7 @@
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
 use anyhow::{Context, Result, bail};
 use rmcp::handler::server::tool::ToolRouter;
@@ -33,6 +35,62 @@ impl Config {
 }
 
 // ---------------------------------------------------------------------------
+// IndexedPaths
+// ---------------------------------------------------------------------------
+
+/// Shared set of paths currently registered in the search index.
+///
+/// `read_file` consults this set to decide whether a path may be read,
+/// replacing the previous "must live under base_dir" check. Registration
+/// into the index is therefore the permission grant.
+///
+/// Cheap to clone (internally `Arc`).
+#[derive(Clone, Default)]
+pub struct IndexedPaths(Arc<RwLock<HashSet<PathBuf>>>);
+
+impl IndexedPaths {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert(&self, path: PathBuf) {
+        self.0
+            .write()
+            .expect("indexed-paths lock poisoned")
+            .insert(path);
+    }
+
+    pub fn extend<I: IntoIterator<Item = PathBuf>>(&self, paths: I) {
+        self.0
+            .write()
+            .expect("indexed-paths lock poisoned")
+            .extend(paths);
+    }
+
+    pub fn remove(&self, path: &Path) -> bool {
+        self.0
+            .write()
+            .expect("indexed-paths lock poisoned")
+            .remove(path)
+    }
+
+    pub fn contains(&self, path: &Path) -> bool {
+        self.0
+            .read()
+            .expect("indexed-paths lock poisoned")
+            .contains(path)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.read().expect("indexed-paths lock poisoned").len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.read().expect("indexed-paths lock poisoned").is_empty()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // MCP Tool parameters
 // ---------------------------------------------------------------------------
 
@@ -60,7 +118,7 @@ struct ReadFileParams {
 #[derive(Clone)]
 pub struct TerrainServer {
     engine: Traverze,
-    base_dir: PathBuf,
+    indexed_paths: IndexedPaths,
     tool_router: ToolRouter<Self>,
     instructions: String,
     indexed_count: usize,
@@ -110,8 +168,8 @@ impl TerrainServer {
         let canonical = fs::canonicalize(&params.path)
             .map_err(|e| format!("file not found: {}: {e}", params.path))?;
 
-        if !canonical.starts_with(&self.base_dir) {
-            return Err("access denied: path is outside the indexed directory".to_string());
+        if !self.indexed_paths.contains(&canonical) {
+            return Err("access denied: path is not in the index".to_string());
         }
 
         fs::read_to_string(&canonical).map_err(|e| format!("failed to read file: {e}"))
@@ -133,11 +191,7 @@ impl ServerHandler for TerrainServer {
         context: NotificationContext<RoleServer>,
     ) -> impl std::future::Future<Output = ()> + Send + '_ {
         let peer = context.peer.clone();
-        let message = format!(
-            "indexed {} markdown files from {}",
-            self.indexed_count,
-            self.base_dir.display()
-        );
+        let message = format!("indexed {} files", self.indexed_count);
         async move {
             // Spawn as a background task to avoid blocking `on_initialized`.
             // Some MCP clients (e.g. Claude Code) won't process `tools/list`
@@ -157,7 +211,12 @@ impl ServerHandler for TerrainServer {
 }
 
 impl TerrainServer {
-    pub fn new(engine: Traverze, base_dir: PathBuf, config: &Config, indexed_count: usize) -> Self {
+    pub fn new(
+        engine: Traverze,
+        indexed_paths: IndexedPaths,
+        config: &Config,
+        indexed_count: usize,
+    ) -> Self {
         let mut router = Self::tool_router();
 
         if let Some(desc) = &config.search_description {
@@ -177,7 +236,7 @@ impl TerrainServer {
 
         Self {
             engine,
-            base_dir,
+            indexed_paths,
             tool_router: router,
             instructions,
             indexed_count,
