@@ -6,9 +6,8 @@ use std::sync::{Arc, RwLock};
 use anyhow::{Context, Result, bail};
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{LoggingLevel, LoggingMessageNotificationParam, ServerCapabilities, ServerInfo};
-use rmcp::service::NotificationContext;
-use rmcp::{RoleServer, ServerHandler, tool, tool_handler, tool_router};
+use rmcp::model::{ServerCapabilities, ServerInfo};
+use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use traverze::{SearchOptions, SnippetOptions, TokenizerMode, Traverze};
@@ -121,7 +120,6 @@ pub struct TerrainServer {
     indexed_paths: IndexedPaths,
     tool_router: ToolRouter<Self>,
     instructions: String,
-    indexed_count: usize,
 }
 
 #[tool_router]
@@ -185,38 +183,10 @@ impl ServerHandler for TerrainServer {
             ..Default::default()
         }
     }
-
-    fn on_initialized(
-        &self,
-        context: NotificationContext<RoleServer>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
-        let peer = context.peer.clone();
-        let message = format!("indexed {} files", self.indexed_count);
-        async move {
-            // Spawn as a background task to avoid blocking `on_initialized`.
-            // Some MCP clients (e.g. Claude Code) won't process `tools/list`
-            // until this handler returns, so a blocking `notify_logging_message`
-            // causes tool discovery to time out.
-            tokio::spawn(async move {
-                let _ = peer
-                    .notify_logging_message(LoggingMessageNotificationParam {
-                        level: LoggingLevel::Info,
-                        data: serde_json::json!(message),
-                        logger: Some("terrain".to_string()),
-                    })
-                    .await;
-            });
-        }
-    }
 }
 
 impl TerrainServer {
-    pub fn new(
-        engine: Traverze,
-        indexed_paths: IndexedPaths,
-        config: &Config,
-        indexed_count: usize,
-    ) -> Self {
+    pub fn new(engine: Traverze, indexed_paths: IndexedPaths, config: &Config) -> Self {
         let mut router = Self::tool_router();
 
         if let Some(desc) = &config.search_description {
@@ -239,7 +209,6 @@ impl TerrainServer {
             indexed_paths,
             tool_router: router,
             instructions,
-            indexed_count,
         }
     }
 }
