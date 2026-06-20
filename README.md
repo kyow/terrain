@@ -1,5 +1,7 @@
 # terrain
 
+English | [日本語](README.ja.md)
+
 `terrain` is a lightweight, configurable, local-first full-text search engine for your Markdown knowledge base, with built-in support for Japanese text.
 
 It runs as a command-line MCP (Model Context Protocol) server, indexing a specified directory of `.md` files and exposing search and retrieval tools.
