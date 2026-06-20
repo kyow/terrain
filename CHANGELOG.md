@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-20
+
 ### Added
 
 - File watcher to monitor directory changes and automatically update the index
@@ -38,5 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional `cli` feature flag for `clap` dependency
 - Apache 2.0 and MIT dual license
 
-[unreleased]: https://github.com/kyow/terrain/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/kyow/terrain/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kyow/terrain/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kyow/terrain/releases/tag/v0.1.0
