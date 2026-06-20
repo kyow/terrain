@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-20
+
 ### Added
 
 - ディレクトリの変更を監視してインデックスを自動更新するファイルウォッチャーを追加
@@ -38,5 +40,6 @@
 - `clap` 依存をオプショナルにする `cli` フィーチャーフラグ
 - Apache 2.0 および MIT デュアルライセンス
 
-[unreleased]: https://github.com/kyow/terrain/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/kyow/terrain/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kyow/terrain/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kyow/terrain/releases/tag/v0.1.0
