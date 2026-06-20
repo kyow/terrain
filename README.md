@@ -9,6 +9,7 @@ It runs as a command-line MCP (Model Context Protocol) server, indexing a specif
 - **Full-Text Search:** Powered by the `traverze` search engine, built on `tantivy`.
 - **Japanese Support:** Utilizes `lindera` with an IPADIC dictionary for accurate morphological analysis and tokenization of Japanese text.
 - **MCP Server:** Exposes a simple, machine-readable tool interface over standard I/O.
+- **Auto-Indexing:** Watches the target directory and updates the index automatically when files are added, modified, removed, or renamed — no restart required. Events are debounced and processed in batches for efficiency.
 - **Secure:** `read_file` only serves paths that have been registered in the index, so registration is the permission grant.
 - **Configurable:** Customize tool descriptions via a TOML configuration file to tailor AI model behavior.
 - **Cross-Platform:** Built with Rust, runs on Windows, macOS, and Linux.
@@ -76,7 +77,16 @@ If you built from source without `cargo install`, use the full path to the execu
     indexed 1234 markdown files from /path/to/your/notes
     ```
 
-3.  **Interact via MCP:**
+3.  **Watching for changes:**
+    After the initial index, the server watches the directory and keeps the index in sync automatically — there is no need to restart when you add, edit, remove, or rename Markdown files. File-system events are debounced and processed in batches, and you will see log lines as the index is updated.
+
+    ```
+    watching /path/to/your/notes for changes
+    watcher: re-indexed 1 file(s)
+    watcher: removed 1 file(s) from index
+    ```
+
+4.  **Interact via MCP:**
     Once indexed, the server listens on `stdin` for MCP JSON requests and sends responses to `stdout`. You can use this interface with any MCP-compatible client or controller.
 
 ## Configuration
