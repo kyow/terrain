@@ -21,7 +21,7 @@ cli = ["dep:clap", "dep:notify"]
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"], optional = true }
-rmcp = { version = "0.17.0", features = ["server", "transport-io"] }
+rmcp = { version = "1", features = ["server", "transport-io"] }
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

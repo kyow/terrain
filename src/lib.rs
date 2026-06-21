@@ -174,14 +174,13 @@ impl TerrainServer {
     }
 }
 
-#[tool_handler]
+#[tool_handler(router = self.tool_router)]
 impl ServerHandler for TerrainServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
-            instructions: Some(self.instructions.clone()),
-            ..Default::default()
-        }
+        let mut info = ServerInfo::default();
+        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info.instructions = Some(self.instructions.clone());
+        info
     }
 }
 
