@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raised the minimum supported Rust version (MSRV) to 1.88
+- Updated dependencies to their latest versions: `rmcp` 0.17 → 1.7, `notify` 7 → 8, `toml` 0.8 → 1, `clap` 4.5 → 4.6, `tokio` 1.49 → 1.52, `serde_json` 1.0.149 → 1.0.150
+
 ## [0.2.0] - 2026-06-20
 
 ### Added
