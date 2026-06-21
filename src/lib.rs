@@ -174,14 +174,13 @@ impl TerrainServer {
     }
 }
 
-#[tool_handler]
+#[tool_handler(router = self.tool_router)]
 impl ServerHandler for TerrainServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
-            instructions: Some(self.instructions.clone()),
-            ..Default::default()
-        }
+        let mut info = ServerInfo::default();
+        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info.instructions = Some(self.instructions.clone());
+        info
     }
 }
 
@@ -189,16 +188,14 @@ impl TerrainServer {
     pub fn new(engine: Traverze, indexed_paths: IndexedPaths, config: &Config) -> Self {
         let mut router = Self::tool_router();
 
-        if let Some(desc) = &config.search_description {
-            if let Some(route) = router.map.get_mut("search") {
+        if let Some(desc) = &config.search_description
+            && let Some(route) = router.map.get_mut("search") {
                 route.attr.description = Some(desc.clone().into());
             }
-        }
-        if let Some(desc) = &config.read_file_description {
-            if let Some(route) = router.map.get_mut("read_file") {
+        if let Some(desc) = &config.read_file_description
+            && let Some(route) = router.map.get_mut("read_file") {
                 route.attr.description = Some(desc.clone().into());
             }
-        }
 
         let instructions = config.instructions.clone().unwrap_or_else(|| {
             "terrain MCP server – search and read indexed Markdown files".to_string()

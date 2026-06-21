@@ -2,7 +2,7 @@
 name = "terrain"
 version = "0.2.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "A lightweight, configurable, local-first full-text search engine for Markdown knowledge bases with Japanese text support"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/kyow/terrain"
@@ -21,11 +21,11 @@ cli = ["dep:clap", "dep:notify"]
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"], optional = true }
-rmcp = { version = "0.17.0", features = ["server", "transport-io"] }
+rmcp = { version = "1", features = ["server", "transport-io"] }
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
-toml = "0.8"
-notify = { version = "7", optional = true }
+toml = "1"
+notify = { version = "8", optional = true }
 traverze = { version = "0.2.0", features = ["tokenizer-lindera-ipadic"] }
