@@ -4,13 +4,14 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use anyhow::{Context, Result, bail};
+use async_trait::async_trait;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
-use serde::Deserialize;
-use traverze::{SearchOptions, SnippetOptions, TokenizerMode, Traverze};
+use serde::{Deserialize, Serialize};
+use traverze::{SearchOptions as TraverzeSearchOptions, SnippetOptions, TokenizerMode, Traverze};
 
 // ---------------------------------------------------------------------------
 // Config
@@ -90,6 +91,70 @@ impl IndexedPaths {
 }
 
 // ---------------------------------------------------------------------------
+// Knowledge provider contract
+// ---------------------------------------------------------------------------
+//
+// terrain owns these types so that the search / read_file tool surface is
+// defined independently of any particular search engine. A `KnowledgeProvider`
+// supplies the behaviour; `Traverze` (or any other backend) stays hidden behind
+// the implementation. These types are part of terrain's public contract and
+// therefore carry a stability commitment.
+
+/// A single search result returned by a [`KnowledgeProvider`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchHit {
+    /// Absolute path of the matching file.
+    pub path: String,
+    /// Relevance score; higher is more relevant.
+    pub score: f32,
+    /// Surrounding text snippet, if the provider produced one.
+    pub snippet: Option<String>,
+}
+
+/// Options controlling a [`KnowledgeProvider::search`] call.
+#[derive(Debug, Clone)]
+pub struct SearchOptions {
+    /// Maximum number of results to return.
+    pub limit: usize,
+    /// Maximum snippet length in characters. `None` disables snippets.
+    pub snippet_max_chars: Option<usize>,
+}
+
+impl Default for SearchOptions {
+    fn default() -> Self {
+        Self {
+            limit: 20,
+            snippet_max_chars: Some(150),
+        }
+    }
+}
+
+/// The full contents of a file returned by [`KnowledgeProvider::read_file`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileContent {
+    /// Absolute path of the file that was read.
+    pub path: String,
+    /// The file's contents.
+    pub content: String,
+}
+
+/// A source of searchable knowledge backing terrain's MCP tools.
+///
+/// Implementations own the search engine and the access-control policy for
+/// `read_file`; the engine type never appears in this interface, which is what
+/// makes the backend transparent to MCP clients.
+#[async_trait]
+pub trait KnowledgeProvider: Send + Sync {
+    /// Search the knowledge base and return matching hits.
+    async fn search(&self, query: &str, opts: &SearchOptions) -> Result<Vec<SearchHit>>;
+
+    /// Read the full contents of `path`.
+    ///
+    /// Implementations are responsible for enforcing which paths may be read.
+    async fn read_file(&self, path: &Path) -> Result<FileContent>;
+}
+
+// ---------------------------------------------------------------------------
 // MCP Tool parameters
 // ---------------------------------------------------------------------------
 
@@ -131,7 +196,7 @@ impl TerrainServer {
         description = "Search local Markdown files (knowledge base) using full-text search. This engine is highly optimized for Japanese text using morphological analysis, so you can confidently pass natural Japanese keywords, phrases, or technical terms. Use this as your first action to find relevant context to answer the user's question. It returns a list of matching absolute file paths, relevance scores, and surrounding text snippets."
     )]
     async fn search(&self, Parameters(params): Parameters<SearchParams>) -> Result<String, String> {
-        let options = SearchOptions {
+        let options = TraverzeSearchOptions {
             limit: params.limit.unwrap_or(20),
             snippet: Some(SnippetOptions::default()),
         };
