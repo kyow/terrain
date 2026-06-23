@@ -10,8 +10,10 @@ use notify::event::{CreateKind, RemoveKind, RenameMode};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Arc;
 
-use rmcp::{ServiceExt, transport::stdio};
-use terrain::{Config, IndexedPaths, TerrainServer, TraverzeProvider, build_engine, resolve_dir};
+use terrain::rmcp::transport::stdio;
+use terrain::{
+    Config, IndexedPaths, TerrainServer, TraverzeProvider, build_engine, resolve_dir, serve_io,
+};
 use traverze::Traverze;
 
 /// terrain MCP server – Markdown full-text search
@@ -54,10 +56,8 @@ async fn main() -> Result<()> {
     eprintln!("watching {} for changes", target_dir.display());
 
     let provider = Arc::new(TraverzeProvider::new(engine, indexed_paths));
-    let server = TerrainServer::new(provider, &config)
-        .serve(stdio())
-        .await?;
-    server.waiting().await?;
+    let server = TerrainServer::new(provider, &config);
+    serve_io(server, stdio()).await?;
     Ok(())
 }
 

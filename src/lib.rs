@@ -8,7 +8,13 @@ use async_trait::async_trait;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
-use rmcp::{ServerHandler, tool, tool_handler, tool_router};
+use rmcp::transport::IntoTransport;
+use rmcp::{RoleServer, ServerHandler, ServiceExt, tool, tool_handler, tool_router};
+
+// Re-export rmcp so that consumers (e.g. an embedding host) can build transports
+// and other rmcp values without taking their own dependency on rmcp, keeping the
+// version aligned with the one terrain serves with.
+pub use rmcp;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "bundled-provider")]
@@ -263,6 +269,33 @@ impl TerrainServer {
             instructions,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Serving
+// ---------------------------------------------------------------------------
+
+/// Serve `server` over `transport` until the connection closes.
+///
+/// The transport is anything rmcp can serve over, including a `(reader, writer)`
+/// pair or a single bidirectional `AsyncRead + AsyncWrite` stream — stdio, a
+/// named pipe, or a Unix domain socket. This keeps the rmcp dependency inside
+/// terrain: callers hand over a stream and never have to name an rmcp type
+/// (use the re-exported [`rmcp`] if they need transport constructors).
+pub async fn serve_io<T, E, A>(server: TerrainServer, transport: T) -> Result<()>
+where
+    T: IntoTransport<RoleServer, E, A>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    let running = server
+        .serve(transport)
+        .await
+        .context("failed to start MCP server")?;
+    running
+        .waiting()
+        .await
+        .context("MCP server terminated unexpectedly")?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
