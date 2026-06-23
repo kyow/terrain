@@ -16,7 +16,9 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-cli = ["dep:clap", "dep:notify"]
+cli = ["bundled-provider", "dep:clap", "dep:notify"]
+# Bundled reference provider backed by the traverze search engine.
+bundled-provider = ["dep:traverze"]
 
 [dependencies]
 anyhow = "1.0"
@@ -29,4 +31,4 @@ serde_json = "1"
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
 toml = "1"
 notify = { version = "8", optional = true }
-traverze = { version = "0.2.0", features = ["tokenizer-lindera-ipadic"] }
+traverze = { version = "0.2.0", features = ["tokenizer-lindera-ipadic"], optional = true }
