@@ -1,6 +1,6 @@
 [package]
 name = "terrain"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.88"
 description = "A lightweight, configurable, local-first full-text search engine for Markdown knowledge bases with Japanese text support"
