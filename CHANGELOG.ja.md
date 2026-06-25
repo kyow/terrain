@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-26
+
 ### Changed
 
 - サポートする最低 Rust バージョン（MSRV）を 1.88 に引き上げ
@@ -45,6 +47,7 @@
 - `clap` 依存をオプショナルにする `cli` フィーチャーフラグ
 - Apache 2.0 および MIT デュアルライセンス
 
-[unreleased]: https://github.com/kyow/terrain/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/kyow/terrain/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/kyow/terrain/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kyow/terrain/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kyow/terrain/releases/tag/v0.1.0

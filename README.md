@@ -32,7 +32,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-terrain = { version = "0.2.0", default-features = false }
+terrain = { version = "0.2", default-features = false }
 ```
 
 Disabling default features drops the `clap` and `notify` dependencies that the CLI uses, leaving a lean library suitable for embedding.

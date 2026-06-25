@@ -32,7 +32,7 @@ cargo install terrain
 
 ```toml
 [dependencies]
-terrain = { version = "0.2.0", default-features = false }
+terrain = { version = "0.2", default-features = false }
 ```
 
 デフォルトフィーチャーを無効にすると、CLI が使用する `clap` と `notify` への依存が外れ、組み込みに適した軽量なライブラリになります。
