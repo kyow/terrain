@@ -8,8 +8,12 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use notify::event::{CreateKind, RemoveKind, RenameMode};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use rmcp::{ServiceExt, transport::stdio};
-use terrain::{Config, IndexedPaths, TerrainServer, build_engine, resolve_dir};
+use std::sync::Arc;
+
+use terrain::rmcp::transport::stdio;
+use terrain::{
+    Config, IndexedPaths, TerrainServer, TraverzeProvider, build_engine, resolve_dir, serve_io,
+};
 use traverze::Traverze;
 
 /// terrain MCP server – Markdown full-text search
@@ -51,10 +55,9 @@ async fn main() -> Result<()> {
         .context("failed to start file watcher")?;
     eprintln!("watching {} for changes", target_dir.display());
 
-    let server = TerrainServer::new(engine, indexed_paths, &config)
-        .serve(stdio())
-        .await?;
-    server.waiting().await?;
+    let provider = Arc::new(TraverzeProvider::new(engine, indexed_paths));
+    let server = TerrainServer::new(provider, &config);
+    serve_io(server, stdio()).await?;
     Ok(())
 }
 

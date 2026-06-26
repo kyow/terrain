@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `KnowledgeProvider` trait and its contract types (`SearchHit`, `SearchOptions`, `FileContent`), owned by terrain so the tool surface is decoupled from the underlying search engine
+- `TraverzeProvider`, a bundled reference provider backed by `traverze`, behind the new `bundled-provider` feature (enabled by default through `cli`)
+- `serve_io` helper to serve the MCP server over any `AsyncRead + AsyncWrite` transport (stdio, named pipe, Unix domain socket)
+- Re-export of `rmcp` (`pub use rmcp`) so embedding apps can construct transports without depending on `rmcp` directly
+
+### Changed
+
+- `TerrainServer` tools now delegate to a `KnowledgeProvider` instead of calling `traverze` directly, and `read_file` access control moved into the provider (internal refactor, no behavior change for the CLI)
+- `TerrainServer::new` signature changed to `(provider, &config)` (was `(engine, indexed_paths, &config)`)
+- `traverze` is now an optional dependency behind the `bundled-provider` feature, so embedding apps can depend on terrain without pulling in `traverze`; `build_engine` is gated behind the same feature
+
 ## [0.2.1] - 2026-06-26
 
 ### Changed

@@ -4,13 +4,23 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use anyhow::{Context, Result, bail};
+use async_trait::async_trait;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
-use rmcp::{ServerHandler, tool, tool_handler, tool_router};
+use rmcp::transport::IntoTransport;
+use rmcp::{RoleServer, ServerHandler, ServiceExt, tool, tool_handler, tool_router};
+
+// Re-export rmcp so that consumers (e.g. an embedding host) can build transports
+// and other rmcp values without taking their own dependency on rmcp, keeping the
+// version aligned with the one terrain serves with.
+pub use rmcp;
 use schemars::JsonSchema;
-use serde::Deserialize;
-use traverze::{SearchOptions, SnippetOptions, TokenizerMode, Traverze};
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "bundled-provider")]
+use traverze::{
+    SearchOptions as TraverzeSearchOptions, SnippetFormat, SnippetOptions, TokenizerMode, Traverze,
+};
 
 // ---------------------------------------------------------------------------
 // Config
@@ -90,6 +100,70 @@ impl IndexedPaths {
 }
 
 // ---------------------------------------------------------------------------
+// Knowledge provider contract
+// ---------------------------------------------------------------------------
+//
+// terrain owns these types so that the search / read_file tool surface is
+// defined independently of any particular search engine. A `KnowledgeProvider`
+// supplies the behaviour; `Traverze` (or any other backend) stays hidden behind
+// the implementation. These types are part of terrain's public contract and
+// therefore carry a stability commitment.
+
+/// A single search result returned by a [`KnowledgeProvider`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchHit {
+    /// Absolute path of the matching file.
+    pub path: String,
+    /// Relevance score; higher is more relevant.
+    pub score: f32,
+    /// Surrounding text snippet, if the provider produced one.
+    pub snippet: Option<String>,
+}
+
+/// Options controlling a [`KnowledgeProvider::search`] call.
+#[derive(Debug, Clone)]
+pub struct SearchOptions {
+    /// Maximum number of results to return.
+    pub limit: usize,
+    /// Maximum snippet length in characters. `None` disables snippets.
+    pub snippet_max_chars: Option<usize>,
+}
+
+impl Default for SearchOptions {
+    fn default() -> Self {
+        Self {
+            limit: 20,
+            snippet_max_chars: Some(150),
+        }
+    }
+}
+
+/// The full contents of a file returned by [`KnowledgeProvider::read_file`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileContent {
+    /// Absolute path of the file that was read.
+    pub path: String,
+    /// The file's contents.
+    pub content: String,
+}
+
+/// A source of searchable knowledge backing terrain's MCP tools.
+///
+/// Implementations own the search engine and the access-control policy for
+/// `read_file`; the engine type never appears in this interface, which is what
+/// makes the backend transparent to MCP clients.
+#[async_trait]
+pub trait KnowledgeProvider: Send + Sync {
+    /// Search the knowledge base and return matching hits.
+    async fn search(&self, query: &str, opts: &SearchOptions) -> Result<Vec<SearchHit>>;
+
+    /// Read the full contents of `path`.
+    ///
+    /// Implementations are responsible for enforcing which paths may be read.
+    async fn read_file(&self, path: &Path) -> Result<FileContent>;
+}
+
+// ---------------------------------------------------------------------------
 // MCP Tool parameters
 // ---------------------------------------------------------------------------
 
@@ -116,8 +190,7 @@ struct ReadFileParams {
 
 #[derive(Clone)]
 pub struct TerrainServer {
-    engine: Traverze,
-    indexed_paths: IndexedPaths,
+    provider: Arc<dyn KnowledgeProvider>,
     tool_router: ToolRouter<Self>,
     instructions: String,
 }
@@ -132,26 +205,16 @@ impl TerrainServer {
     )]
     async fn search(&self, Parameters(params): Parameters<SearchParams>) -> Result<String, String> {
         let options = SearchOptions {
-            limit: params.limit.unwrap_or(20),
-            snippet: Some(SnippetOptions::default()),
+            limit: params.limit.unwrap_or_else(|| SearchOptions::default().limit),
+            ..SearchOptions::default()
         };
         let hits = self
-            .engine
-            .search_with_options(&params.query, options)
-            .map_err(|e| format!("search failed: {e}"))?;
+            .provider
+            .search(&params.query, &options)
+            .await
+            .map_err(|e| format!("search failed: {e:#}"))?;
 
-        let results: Vec<serde_json::Value> = hits
-            .iter()
-            .map(|h| {
-                serde_json::json!({
-                    "path": h.path,
-                    "score": h.score,
-                    "snippet": h.snippet,
-                })
-            })
-            .collect();
-
-        serde_json::to_string_pretty(&results).map_err(|e| format!("serialization failed: {e}"))
+        serde_json::to_string_pretty(&hits).map_err(|e| format!("serialization failed: {e}"))
     }
 
     /// Read the contents of a file within the indexed directory.
@@ -163,14 +226,13 @@ impl TerrainServer {
         &self,
         Parameters(params): Parameters<ReadFileParams>,
     ) -> Result<String, String> {
-        let canonical = fs::canonicalize(&params.path)
-            .map_err(|e| format!("file not found: {}: {e}", params.path))?;
+        let content = self
+            .provider
+            .read_file(Path::new(&params.path))
+            .await
+            .map_err(|e| format!("{e:#}"))?;
 
-        if !self.indexed_paths.contains(&canonical) {
-            return Err("access denied: path is not in the index".to_string());
-        }
-
-        fs::read_to_string(&canonical).map_err(|e| format!("failed to read file: {e}"))
+        Ok(content.content)
     }
 }
 
@@ -185,7 +247,7 @@ impl ServerHandler for TerrainServer {
 }
 
 impl TerrainServer {
-    pub fn new(engine: Traverze, indexed_paths: IndexedPaths, config: &Config) -> Self {
+    pub fn new(provider: Arc<dyn KnowledgeProvider>, config: &Config) -> Self {
         let mut router = Self::tool_router();
 
         if let Some(desc) = &config.search_description
@@ -202,11 +264,108 @@ impl TerrainServer {
         });
 
         Self {
-            engine,
-            indexed_paths,
+            provider,
             tool_router: router,
             instructions,
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Serving
+// ---------------------------------------------------------------------------
+
+/// Serve `server` over `transport` until the connection closes.
+///
+/// The transport is anything rmcp can serve over, including a `(reader, writer)`
+/// pair or a single bidirectional `AsyncRead + AsyncWrite` stream — stdio, a
+/// named pipe, or a Unix domain socket. This keeps the rmcp dependency inside
+/// terrain: callers hand over a stream and never have to name an rmcp type
+/// (use the re-exported [`rmcp`] if they need transport constructors).
+pub async fn serve_io<T, E, A>(server: TerrainServer, transport: T) -> Result<()>
+where
+    T: IntoTransport<RoleServer, E, A>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    let running = server
+        .serve(transport)
+        .await
+        .context("failed to start MCP server")?;
+    running
+        .waiting()
+        .await
+        .context("MCP server terminated unexpectedly")?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// TraverzeProvider (bundled reference provider)
+// ---------------------------------------------------------------------------
+
+/// The default [`KnowledgeProvider`], backed by a `traverze` search engine.
+///
+/// This is the reference implementation used by the terrain CLI binary. Hosts
+/// that embed terrain (and bring their own engine) implement
+/// [`KnowledgeProvider`] themselves and can compile terrain without the
+/// `bundled-provider` feature.
+///
+/// Access control for `read_file` is enforced here: only paths registered in
+/// [`IndexedPaths`] may be read.
+#[cfg(feature = "bundled-provider")]
+#[derive(Clone)]
+pub struct TraverzeProvider {
+    engine: Traverze,
+    indexed_paths: IndexedPaths,
+}
+
+#[cfg(feature = "bundled-provider")]
+impl TraverzeProvider {
+    pub fn new(engine: Traverze, indexed_paths: IndexedPaths) -> Self {
+        Self {
+            engine,
+            indexed_paths,
+        }
+    }
+}
+
+#[cfg(feature = "bundled-provider")]
+#[async_trait]
+impl KnowledgeProvider for TraverzeProvider {
+    async fn search(&self, query: &str, opts: &SearchOptions) -> Result<Vec<SearchHit>> {
+        let snippet = opts.snippet_max_chars.map(|max_num_chars| SnippetOptions {
+            max_num_chars,
+            format: SnippetFormat::Text,
+        });
+        let options = TraverzeSearchOptions {
+            limit: opts.limit,
+            snippet,
+        };
+        let hits = self.engine.search_with_options(query, options)?;
+        Ok(hits
+            .into_iter()
+            .map(|h| SearchHit {
+                path: h.path,
+                score: h.score,
+                snippet: h.snippet,
+            })
+            .collect())
+    }
+
+    async fn read_file(&self, path: &Path) -> Result<FileContent> {
+        let canonical = fs::canonicalize(path)
+            .with_context(|| format!("file not found: {}", path.display()))?;
+
+        if !self.indexed_paths.contains(&canonical) {
+            bail!("access denied: path is not in the index");
+        }
+
+        let content =
+            fs::read_to_string(&canonical).context("failed to read file")?;
+
+        Ok(FileContent {
+            path: canonical.to_string_lossy().into_owned(),
+            content,
+        })
     }
 }
 
@@ -226,6 +385,7 @@ pub fn resolve_dir(dir: &Path) -> Result<PathBuf> {
 }
 
 /// Create a `Traverze` engine and index the given files.
+#[cfg(feature = "bundled-provider")]
 pub fn build_engine(index_dir: &Path, files: &[PathBuf]) -> Result<(Traverze, usize)> {
     let engine = Traverze::new_in_dir_for_indexing(index_dir, TokenizerMode::LinderaIpadic, true)
         .context("traverze index initialization failed")?;

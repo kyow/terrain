@@ -7,6 +7,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- 検索エンジンからツール契約を切り離すための `KnowledgeProvider` トレイトと、terrain が所有する契約型（`SearchHit` / `SearchOptions` / `FileContent`）を追加
+- `traverze` をバックエンドとする同梱リファレンス実装 `TraverzeProvider` を、新しい `bundled-provider` フィーチャー配下に追加（`cli` 経由で既定有効）
+- 任意の `AsyncRead + AsyncWrite` トランスポート（stdio・名前付きパイプ・Unix ドメインソケット）で給仕する `serve_io` ヘルパーを追加
+- 組み込みアプリが `rmcp` に直接依存せずトランスポートを構築できるよう、`rmcp` を再エクスポート（`pub use rmcp`）
+
+### Changed
+
+- `TerrainServer` のツールが `traverze` を直接呼ぶ代わりに `KnowledgeProvider` へ委譲するよう変更。`read_file` のアクセス制御も provider 側へ移動（内部リファクタリング、CLI の振る舞いの変更なし）
+- `TerrainServer::new` のシグネチャを `(provider, &config)` に変更（旧 `(engine, indexed_paths, &config)`）
+- `traverze` を `bundled-provider` フィーチャー配下のオプショナル依存に変更し、組み込みアプリが `traverze` を引き込まずに terrain へ依存できるように。`build_engine` も同フィーチャーで gate
+
 ## [0.2.1] - 2026-06-26
 
 ### Changed
