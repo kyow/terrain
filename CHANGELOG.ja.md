@@ -13,6 +13,8 @@
 - `traverze` をバックエンドとする同梱リファレンス実装 `TraverzeProvider` を、新しい `bundled-provider` フィーチャー配下に追加（`cli` 経由で既定有効）
 - 任意の `AsyncRead + AsyncWrite` トランスポート（stdio・名前付きパイプ・Unix ドメインソケット）で給仕する `serve_io` ヘルパーを追加
 - 組み込みアプリが `rmcp` に直接依存せずトランスポートを構築できるよう、`rmcp` を再エクスポート（`pub use rmcp`）
+- Streamable HTTP トランスポートを追加: `--transport http` で MCP を `/mcp` に HTTP 配信。`--port` と `--host` で bind アドレスを制御（`--host` を値なしで指定すると `0.0.0.0` に bind し、他のマシンからアクセス可能）
+- 自前の HTTP サーバー（`axum`/`hyper` など）に組み込める `rmcp` の Streamable HTTP tower `Service` を構築する `streamable_http_service` ヘルパーと `streamable-http` フィーチャーを追加
 
 ### Changed
 
