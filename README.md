@@ -10,7 +10,7 @@ It runs as a command-line MCP (Model Context Protocol) server, indexing a specif
 
 - **Full-Text Search:** Powered by the `traverze` search engine, built on `tantivy`.
 - **Japanese Support:** Utilizes `lindera` with an IPADIC dictionary for accurate morphological analysis and tokenization of Japanese text.
-- **MCP Server:** Exposes a simple, machine-readable tool interface over standard I/O.
+- **MCP Server:** Exposes a simple, machine-readable tool interface over stdio or Streamable HTTP.
 - **Auto-Indexing:** Watches the target directory and updates the index automatically when files are added, modified, removed, or renamed — no restart required. Events are debounced and processed in batches for efficiency.
 - **Secure:** `read_file` only serves paths that have been registered in the index, so registration is the permission grant.
 - **Configurable:** Customize tool descriptions via a TOML configuration file to tailor AI model behavior.
@@ -35,14 +35,20 @@ Add the following to your `Cargo.toml`:
 terrain = { version = "0.2", default-features = false }
 ```
 
-Disabling default features drops the `clap` and `notify` dependencies that the CLI uses, leaving a lean library suitable for embedding.
+Disabling default features drops the CLI dependencies (`clap`, `notify`, `axum`) and the bundled `traverze` provider, leaving a lean library where you bring your own search engine. Opt back in per feature as needed:
+
+- `bundled-provider` — the reference `TraverzeProvider` plus `resolve_dir` / `build_engine`.
+- `streamable-http` — the `streamable_http_service` helper (Streamable HTTP transport).
 
 The library exposes the following public API:
 
 - `Config` — Load and parse a TOML configuration file.
-- `TerrainServer` — The MCP server handler, ready to be plugged into an `rmcp` transport. Constructed with `TerrainServer::new(engine, indexed_paths, &config)`.
-- `IndexedPaths` — A cloneable, shared set of paths currently registered in the index. `read_file` consults this set to authorize reads, so the embedding app controls access by registering paths.
-- `resolve_dir` / `build_engine` — Utility functions for directory resolution and search engine initialization.
+- `KnowledgeProvider` — The trait backing the `search` / `read_file` tools, with the `SearchHit`, `SearchOptions`, and `FileContent` types. Implement it to plug in your own search engine and access-control policy.
+- `TerrainServer` — The MCP server handler, ready to be plugged into an `rmcp` transport. Constructed with `TerrainServer::new(provider, &config)`, where `provider` is an `Arc<dyn KnowledgeProvider>`.
+- `IndexedPaths` — A cloneable, shared set of paths currently registered in the index. The bundled provider consults this set to authorize `read_file` reads, so the embedding app controls access by registering paths.
+- `serve_io` — Serve the server over any `rmcp` I/O transport (stdio, a pipe, or a socket).
+- `streamable_http_service` *(feature `streamable-http`)* — Build an `rmcp` Streamable HTTP tower `Service` to mount into your own HTTP server (e.g. `axum`/`hyper`).
+- `TraverzeProvider` / `resolve_dir` / `build_engine` *(feature `bundled-provider`)* — The reference provider backed by `traverze`, plus directory-resolution and engine-initialization helpers.
 
 The library does not scan directories or watch the filesystem on its own — embedding apps decide which files to register and when to re-index. See [src/main.rs](src/main.rs) for a reference integration that walks a directory of `.md` files and keeps the index in sync via [`notify`](https://crates.io/crates/notify).
 
@@ -62,6 +68,18 @@ To use `terrain` with an MCP-compatible client such as Claude Desktop, add the f
 ```
 
 If you built from source without `cargo install`, use the full path to the executable instead (e.g., `"/path/to/terrain"`).
+
+For clients that connect over the network, start the server with the HTTP transport (see [Transports](#transports)) and point the client at the endpoint URL instead of a command:
+
+```json
+{
+  "mcpServers": {
+    "terrain": {
+      "url": "http://127.0.0.1:8000/mcp"
+    }
+  }
+}
+```
 
 ## Usage
 
@@ -90,6 +108,36 @@ If you built from source without `cargo install`, use the full path to the execu
 
 4.  **Interact via MCP:**
     Once indexed, the server listens on `stdin` for MCP JSON requests and sends responses to `stdout`. You can use this interface with any MCP-compatible client or controller.
+
+## Transports
+
+`terrain` speaks MCP over two transports, selected with `--transport`:
+
+- `stdio` (default) — communicates over standard input/output. Used by most MCP clients (e.g. Claude Desktop), which launch the server as a subprocess.
+- `http` — serves the [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http) at `/mcp`, so clients connect over the network.
+
+### Streamable HTTP
+
+```bash
+# Listen on 127.0.0.1:8000 (this machine only)
+terrain --dir /path/to/your/notes --transport http
+
+# Change the port
+terrain --dir /path/to/your/notes --transport http --port 9000
+
+# Make it reachable from other machines (binds 0.0.0.0)
+terrain --dir /path/to/your/notes --transport http --host
+```
+
+The endpoint is `http://<host>:<port>/mcp`.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--transport <stdio\|http>` | `stdio` | Transport to serve over. |
+| `--port <PORT>` | `8000` | Port for the `http` transport. |
+| `--host [ADDR]` | `127.0.0.1` | Bind address for `http`. Omit for local only; pass the flag with no value to bind `0.0.0.0` (reachable from other machines); pass an address to bind a specific interface. |
+
+> **Security:** `terrain` has no built-in authentication — reachability is governed entirely by the bind address. The default (`127.0.0.1`) keeps the server private to your machine. Only use `--host` on a trusted network, and put `terrain` behind a reverse proxy, SSH tunnel, or VPN if you need authenticated or public access.
 
 ## Configuration
 
