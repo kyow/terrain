@@ -9,7 +9,16 @@ use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::transport::IntoTransport;
+#[cfg(feature = "streamable-http")]
+use rmcp::transport::streamable_http_server::{
+    StreamableHttpService, session::local::LocalSessionManager,
+};
 use rmcp::{RoleServer, ServerHandler, ServiceExt, tool, tool_handler, tool_router};
+
+// Re-exported so callers can construct/customize the HTTP server config without
+// naming an rmcp path of their own (keeps the rmcp version aligned with terrain).
+#[cfg(feature = "streamable-http")]
+pub use rmcp::transport::streamable_http_server::StreamableHttpServerConfig;
 
 // Re-export rmcp so that consumers (e.g. an embedding host) can build transports
 // and other rmcp values without taking their own dependency on rmcp, keeping the
@@ -296,6 +305,29 @@ where
         .await
         .context("MCP server terminated unexpectedly")?;
     Ok(())
+}
+
+/// Build the rmcp Streamable HTTP [`tower::Service`] for this server.
+///
+/// terrain stops at the tower service: the caller mounts it into an HTTP
+/// runtime (e.g. `axum::Router::nest_service`) and binds the socket. This
+/// mirrors how [`serve_io`] leaves the stream to the caller and keeps `axum`
+/// out of terrain's dependency tree — embedding hosts can graft the MCP
+/// endpoint onto their own HTTP server.
+///
+/// Sessions are kept in-memory via [`LocalSessionManager`]. `config` controls
+/// session/SSE behaviour and inbound `Host`/`Origin` validation; see
+/// [`StreamableHttpServerConfig`].
+#[cfg(feature = "streamable-http")]
+pub fn streamable_http_service(
+    server: TerrainServer,
+    config: StreamableHttpServerConfig,
+) -> StreamableHttpService<TerrainServer, LocalSessionManager> {
+    StreamableHttpService::new(
+        move || Ok(server.clone()),
+        Arc::new(LocalSessionManager::default()),
+        config,
+    )
 }
 
 // ---------------------------------------------------------------------------

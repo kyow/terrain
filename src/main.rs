@@ -5,16 +5,26 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use notify::event::{CreateKind, RemoveKind, RenameMode};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Arc;
 
 use terrain::rmcp::transport::stdio;
 use terrain::{
-    Config, IndexedPaths, TerrainServer, TraverzeProvider, build_engine, resolve_dir, serve_io,
+    Config, IndexedPaths, StreamableHttpServerConfig, TerrainServer, TraverzeProvider, build_engine,
+    resolve_dir, serve_io, streamable_http_service,
 };
 use traverze::Traverze;
+
+/// Transport the MCP server speaks over.
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum Transport {
+    /// Standard input/output (default; used by most MCP clients).
+    Stdio,
+    /// Streamable HTTP, served at `/mcp`.
+    Http,
+}
 
 /// terrain MCP server – Markdown full-text search
 #[derive(Parser)]
@@ -26,6 +36,21 @@ struct Cli {
     /// Path to a TOML config file for customizing tool description
     #[arg(long)]
     config: Option<PathBuf>,
+    /// Transport to serve over.
+    #[arg(long, value_enum, default_value_t = Transport::Stdio)]
+    transport: Transport,
+    /// Port to listen on when using the `http` transport.
+    #[arg(long, default_value_t = 8000)]
+    port: u16,
+    /// Address to bind when using the `http` transport.
+    ///
+    /// Omit to listen on `127.0.0.1` (this machine only). Pass the flag with no
+    /// value to listen on `0.0.0.0` (reachable from other machines). Pass an
+    /// explicit address to bind a specific interface. terrain has no
+    /// authentication, so only expose it on a trusted network or behind a
+    /// reverse proxy / tunnel.
+    #[arg(long, num_args = 0..=1, default_missing_value = "0.0.0.0")]
+    host: Option<String>,
 }
 
 #[tokio::main]
@@ -57,7 +82,38 @@ async fn main() -> Result<()> {
 
     let provider = Arc::new(TraverzeProvider::new(engine, indexed_paths));
     let server = TerrainServer::new(provider, &config);
-    serve_io(server, stdio()).await?;
+
+    match cli.transport {
+        Transport::Stdio => serve_io(server, stdio()).await?,
+        Transport::Http => serve_http(server, &cli).await?,
+    }
+    Ok(())
+}
+
+/// Serve over Streamable HTTP at `/mcp`, listening until Ctrl-C.
+async fn serve_http(server: TerrainServer, cli: &Cli) -> Result<()> {
+    // Reachability is governed solely by the bind address. The `Host` header
+    // check is not access control, so we disable it and let `--host` decide who
+    // can reach the server.
+    let config = StreamableHttpServerConfig::default().disable_allowed_hosts();
+    let service = streamable_http_service(server, config);
+
+    let app = axum::Router::new().nest_service("/mcp", service);
+
+    let bind_host = cli.host.as_deref().unwrap_or("127.0.0.1");
+    let addr = format!("{bind_host}:{}", cli.port);
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .with_context(|| format!("failed to bind {addr}"))?;
+
+    eprintln!("serving MCP over Streamable HTTP at http://{addr}/mcp");
+
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await
+        .context("HTTP server terminated unexpectedly")?;
     Ok(())
 }
 
