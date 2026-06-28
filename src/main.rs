@@ -98,7 +98,9 @@ async fn serve_http(server: TerrainServer, cli: &Cli) -> Result<()> {
     let config = StreamableHttpServerConfig::default().disable_allowed_hosts();
     let service = streamable_http_service(server, config);
 
-    let app = axum::Router::new().nest_service("/mcp", service);
+    let app = axum::Router::new()
+        .nest_service("/mcp", service)
+        .layer(axum::middleware::from_fn(log_request));
 
     let bind_host = cli.host.as_deref().unwrap_or("127.0.0.1");
     let addr = format!("{bind_host}:{}", cli.port);
@@ -108,13 +110,60 @@ async fn serve_http(server: TerrainServer, cli: &Cli) -> Result<()> {
 
     eprintln!("serving MCP over Streamable HTTP at http://{addr}/mcp");
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await
-        .context("HTTP server terminated unexpectedly")?;
+    // `into_make_service_with_connect_info` makes the peer address available to
+    // `log_request` via `ConnectInfo`.
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async {
+        let _ = tokio::signal::ctrl_c().await;
+    })
+    .await
+    .context("HTTP server terminated unexpectedly")?;
     Ok(())
+}
+
+/// TEMPORARY trial logging (issue #10 follow-up will replace this): print the
+/// client address and the raw request body to stderr for each HTTP request, so
+/// you can see which host sent which command. stderr is used so it never clashes
+/// with the stdio transport's stdout protocol channel.
+async fn log_request(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let peer = req
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|ci| ci.0.to_string())
+        .unwrap_or_else(|| "?".to_string());
+
+    let (parts, body) = req.into_parts();
+    // Buffer the body so we can log it, then hand a fresh copy downstream.
+    // Capped at 1 MiB; oversized bodies are dropped (fine for this trial).
+    let bytes = axum::body::to_bytes(body, 1024 * 1024)
+        .await
+        .unwrap_or_default();
+
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+    let command = String::from_utf8_lossy(&bytes);
+    let command = command.trim();
+    if command.is_empty() {
+        eprintln!("[{now}] http: {} {} from {peer}", parts.method, parts.uri.path());
+    } else {
+        let shown: String = command.chars().take(500).collect();
+        eprintln!(
+            "[{now}] http: {} {} from {peer} command={shown}",
+            parts.method,
+            parts.uri.path()
+        );
+    }
+
+    next.run(axum::extract::Request::from_parts(
+        parts,
+        axum::body::Body::from(bytes),
+    ))
+    .await
 }
 
 fn collect_markdown_files(base_dir: &Path) -> Result<Vec<PathBuf>> {

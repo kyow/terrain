@@ -16,7 +16,7 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-cli = ["bundled-provider", "streamable-http", "dep:clap", "dep:notify", "dep:axum"]
+cli = ["bundled-provider", "streamable-http", "dep:clap", "dep:notify", "dep:axum", "dep:chrono"]
 # Bundled reference provider backed by the traverze search engine.
 bundled-provider = ["dep:traverze"]
 # Streamable HTTP transport support (exposes `streamable_http_service`).
@@ -36,4 +36,5 @@ tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "signal",
 toml = "1"
 notify = { version = "8", optional = true }
 axum = { version = "0.8", optional = true }
+chrono = { version = "0.4", optional = true }
 traverze = { version = "0.2.0", features = ["tokenizer-lindera-ipadic"], optional = true }
