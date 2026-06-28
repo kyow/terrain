@@ -16,9 +16,13 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-cli = ["bundled-provider", "dep:clap", "dep:notify"]
+cli = ["bundled-provider", "streamable-http", "dep:clap", "dep:notify", "dep:axum", "dep:chrono"]
 # Bundled reference provider backed by the traverze search engine.
 bundled-provider = ["dep:traverze"]
+# Streamable HTTP transport support (exposes `streamable_http_service`).
+# Only enables the rmcp server-side HTTP transport; bringing your own HTTP
+# runtime (axum/hyper) is left to the caller, so this stays axum-free.
+streamable-http = ["rmcp/transport-streamable-http-server"]
 
 [dependencies]
 anyhow = "1.0"
@@ -28,7 +32,9 @@ rmcp = { version = "1", features = ["server", "transport-io"] }
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "signal", "net"] }
 toml = "1"
 notify = { version = "8", optional = true }
+axum = { version = "0.8", optional = true }
+chrono = { version = "0.4", optional = true }
 traverze = { version = "0.2.0", features = ["tokenizer-lindera-ipadic"], optional = true }

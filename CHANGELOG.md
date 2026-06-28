@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TraverzeProvider`, a bundled reference provider backed by `traverze`, behind the new `bundled-provider` feature (enabled by default through `cli`)
 - `serve_io` helper to serve the MCP server over any `AsyncRead + AsyncWrite` transport (stdio, named pipe, Unix domain socket)
 - Re-export of `rmcp` (`pub use rmcp`) so embedding apps can construct transports without depending on `rmcp` directly
+- Streamable HTTP transport: serve MCP over HTTP at `/mcp` with `--transport http`, plus `--port` and `--host` flags to control the bind address (`--host` with no value binds `0.0.0.0` for access from other machines)
+- `streamable_http_service` helper and the `streamable-http` feature to build an `rmcp` Streamable HTTP tower `Service` for mounting into your own HTTP server (e.g. `axum`/`hyper`)
 
 ### Changed
 
