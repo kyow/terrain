@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{ServerCapabilities, ServerInfo};
+use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
 use rmcp::transport::IntoTransport;
 #[cfg(feature = "streamable-http")]
 use rmcp::transport::streamable_http_server::{
@@ -39,8 +39,31 @@ use traverze::{
 #[serde(default)]
 pub struct Config {
     pub instructions: Option<String>,
-    pub search_description: Option<String>,
-    pub read_file_description: Option<String>,
+    /// Overrides for the MCP `serverInfo` (name / version) reported at
+    /// initialization. Lets an embedding host identify itself by its own name
+    /// instead of terrain's defaults.
+    pub server: ServerInfoConfig,
+    /// Per-tool customization, keyed by tool name (e.g. `search`, `read_file`).
+    /// Unknown tool names are ignored.
+    pub tools: HashMap<String, ToolConfig>,
+}
+
+/// Overrides for the values reported in the MCP `serverInfo` object.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+pub struct ServerInfoConfig {
+    /// Server name; defaults to terrain's crate name when unset.
+    pub name: Option<String>,
+    /// Server version; defaults to terrain's crate version when unset.
+    pub version: Option<String>,
+}
+
+/// Per-tool configuration overrides.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+pub struct ToolConfig {
+    /// Overrides the tool's description advertised to the MCP client.
+    pub description: Option<String>,
 }
 
 impl Config {
@@ -202,6 +225,7 @@ pub struct TerrainServer {
     provider: Arc<dyn KnowledgeProvider>,
     tool_router: ToolRouter<Self>,
     instructions: String,
+    server_info: Implementation,
 }
 
 #[tool_router]
@@ -251,6 +275,7 @@ impl ServerHandler for TerrainServer {
         let mut info = ServerInfo::default();
         info.capabilities = ServerCapabilities::builder().enable_tools().build();
         info.instructions = Some(self.instructions.clone());
+        info.server_info = self.server_info.clone();
         info
     }
 }
@@ -259,23 +284,35 @@ impl TerrainServer {
     pub fn new(provider: Arc<dyn KnowledgeProvider>, config: &Config) -> Self {
         let mut router = Self::tool_router();
 
-        if let Some(desc) = &config.search_description
-            && let Some(route) = router.map.get_mut("search") {
-                route.attr.description = Some(desc.clone().into());
-            }
-        if let Some(desc) = &config.read_file_description
-            && let Some(route) = router.map.get_mut("read_file") {
-                route.attr.description = Some(desc.clone().into());
-            }
+        for (name, tool_config) in &config.tools {
+            if let Some(desc) = &tool_config.description
+                && let Some(route) = router.map.get_mut(name.as_str()) {
+                    route.attr.description = Some(desc.clone().into());
+                }
+        }
 
         let instructions = config.instructions.clone().unwrap_or_else(|| {
             "terrain MCP server – search and read indexed Markdown files".to_string()
         });
 
+        let server_info = Implementation::new(
+            config
+                .server
+                .name
+                .clone()
+                .unwrap_or_else(|| env!("CARGO_PKG_NAME").to_string()),
+            config
+                .server
+                .version
+                .clone()
+                .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string()),
+        );
+
         Self {
             provider,
             tool_router: router,
             instructions,
+            server_info,
         }
     }
 }
