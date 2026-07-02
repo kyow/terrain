@@ -29,3 +29,6 @@ tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
 toml = "1"
 notify = { version = "8", optional = true }
 traverze = { version = "0.2.0", features = ["tokenizer-lindera-ipadic"] }
+
+[dev-dependencies]
+tempfile = "3"
