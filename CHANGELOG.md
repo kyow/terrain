@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `search` no longer returns stale results from directories served by previous runs: `build_engine` now resets the index directory before indexing, and the CLI namespaces the index directory per canonicalized `--dir` so concurrent servers do not clobber each other's index
+
 ## [0.2.1] - 2026-06-26
 
 ### Changed
