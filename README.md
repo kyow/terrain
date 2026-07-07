@@ -42,7 +42,7 @@ The library exposes the following public API:
 - `Config` — Load and parse a TOML configuration file.
 - `TerrainServer` — The MCP server handler, ready to be plugged into an `rmcp` transport. Constructed with `TerrainServer::new(engine, indexed_paths, &config)`.
 - `IndexedPaths` — A cloneable, shared set of paths currently registered in the index. `read_file` consults this set to authorize reads, so the embedding app controls access by registering paths.
-- `resolve_dir` / `build_engine` — Utility functions for directory resolution and search engine initialization.
+- `resolve_dir` / `build_engine` — Utility functions for directory resolution and search engine initialization. `build_engine` resets the given index directory and rebuilds it from scratch, so the index only ever reflects the files passed in.
 
 The library does not scan directories or watch the filesystem on its own — embedding apps decide which files to register and when to re-index. See [src/main.rs](src/main.rs) for a reference integration that walks a directory of `.md` files and keeps the index in sync via [`notify`](https://crates.io/crates/notify).
 

@@ -42,7 +42,7 @@ terrain = { version = "0.2", default-features = false }
 - `Config` — TOML 設定ファイルの読み込みとパース。
 - `TerrainServer` — `rmcp` のトランスポートに組み込める MCP サーバーハンドラ。`TerrainServer::new(engine, indexed_paths, &config)` で構築します。
 - `IndexedPaths` — 現在インデックスに登録されているパスを保持する、クローン可能で共有可能な集合。`read_file` はこの集合を参照して読み取りを認可するため、組み込みアプリ側はパスを登録することでアクセスを制御します。
-- `resolve_dir` / `build_engine` — ディレクトリ解決と検索エンジン初期化のためのユーティリティ関数。
+- `resolve_dir` / `build_engine` — ディレクトリ解決と検索エンジン初期化のためのユーティリティ関数。`build_engine` は渡されたインデックスディレクトリをリセットしてゼロから再構築するため、インデックスは常に渡したファイルのみを反映します。
 
 ライブラリ自体はディレクトリの走査やファイルシステムの監視を行いません。どのファイルをいつ登録・再インデックスするかは組み込みアプリが決定します。`.md` ファイルのディレクトリを走査し、[`notify`](https://crates.io/crates/notify) でインデックスを同期し続ける統合例については [src/main.rs](src/main.rs) を参照してください。
 
