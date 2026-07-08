@@ -7,6 +7,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- 検索エンジンからツール契約を切り離すための `KnowledgeProvider` トレイトと、terrain が所有する契約型（`SearchHit` / `SearchOptions` / `FileContent`）を追加
+- `traverze` をバックエンドとする同梱リファレンス実装 `TraverzeProvider` を、新しい `bundled-provider` フィーチャー配下に追加（`cli` 経由で既定有効）
+- 任意の `AsyncRead + AsyncWrite` トランスポート（stdio・名前付きパイプ・Unix ドメインソケット）で給仕する `serve_io` ヘルパーを追加
+- 組み込みアプリが `rmcp` に直接依存せずトランスポートを構築できるよう、`rmcp` を再エクスポート（`pub use rmcp`）
+- Streamable HTTP トランスポートを追加: `--transport http` で MCP を `/mcp` に HTTP 配信。`--port` と `--host` で bind アドレスを制御（`--host` を値なしで指定すると `0.0.0.0` に bind し、他のマシンからアクセス可能）
+- 自前の HTTP サーバー（`axum`/`hyper` など）に組み込める `rmcp` の Streamable HTTP tower `Service` を構築する `streamable_http_service` ヘルパーと `streamable-http` フィーチャーを追加
+- 埋め込みホストが自身の name/version で名乗れるよう、MCP `serverInfo` の name/version を上書きする config の `[server]` テーブルを追加
+
+### Changed
+
+- `TerrainServer` のツールが `traverze` を直接呼ぶ代わりに `KnowledgeProvider` へ委譲するよう変更。`read_file` のアクセス制御も provider 側へ移動（内部リファクタリング、CLI の振る舞いの変更なし）
+- `TerrainServer::new` のシグネチャを `(provider, &config)` に変更（旧 `(engine, indexed_paths, &config)`）
+- `traverze` を `bundled-provider` フィーチャー配下のオプショナル依存に変更し、組み込みアプリが `traverze` を引き込まずに terrain へ依存できるように。`build_engine` も同フィーチャーで gate
+- config のツール説明を、フラットな `search_description` / `read_file_description` キーから、ツールごとの `[tools.<name>]` テーブル（例: `[tools.search] description = "…"`）へ移動。ツールが増えてもカスタマイズを一般化できるように
+- デフォルトの `serverInfo` が `rmcp` ではなく terrain 自身の name/version を報告するよう変更
+
 ## [0.2.2] - 2026-07-08
 
 ### Fixed

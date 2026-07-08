@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `KnowledgeProvider` trait and its contract types (`SearchHit`, `SearchOptions`, `FileContent`), owned by terrain so the tool surface is decoupled from the underlying search engine
+- `TraverzeProvider`, a bundled reference provider backed by `traverze`, behind the new `bundled-provider` feature (enabled by default through `cli`)
+- `serve_io` helper to serve the MCP server over any `AsyncRead + AsyncWrite` transport (stdio, named pipe, Unix domain socket)
+- Re-export of `rmcp` (`pub use rmcp`) so embedding apps can construct transports without depending on `rmcp` directly
+- Streamable HTTP transport: serve MCP over HTTP at `/mcp` with `--transport http`, plus `--port` and `--host` flags to control the bind address (`--host` with no value binds `0.0.0.0` for access from other machines)
+- `streamable_http_service` helper and the `streamable-http` feature to build an `rmcp` Streamable HTTP tower `Service` for mounting into your own HTTP server (e.g. `axum`/`hyper`)
+- Config `[server]` table to override the MCP `serverInfo` name and version, so embedding hosts can identify themselves by their own name/version
+
+### Changed
+
+- `TerrainServer` tools now delegate to a `KnowledgeProvider` instead of calling `traverze` directly, and `read_file` access control moved into the provider (internal refactor, no behavior change for the CLI)
+- `TerrainServer::new` signature changed to `(provider, &config)` (was `(engine, indexed_paths, &config)`)
+- `traverze` is now an optional dependency behind the `bundled-provider` feature, so embedding apps can depend on terrain without pulling in `traverze`; `build_engine` is gated behind the same feature
+- Config tool descriptions moved from the flat `search_description` / `read_file_description` keys to a per-tool `[tools.<name>]` table (e.g. `[tools.search] description = "…"`); this generalizes tool customization as more tools are added
+- Default `serverInfo` now reports terrain's own name and version instead of `rmcp`'s
+
 ## [0.2.2] - 2026-07-08
 
 ### Fixed

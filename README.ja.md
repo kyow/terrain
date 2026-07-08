@@ -10,7 +10,7 @@
 
 - **全文検索:** `tantivy` を基盤とする `traverze` 検索エンジンを利用。
 - **日本語対応:** IPADIC 辞書を用いた `lindera` により、日本語テキストを高精度に形態素解析・トークン化。
-- **MCP サーバー:** 標準入出力上にシンプルで機械可読なツールインターフェースを公開。
+- **MCP サーバー:** stdio または Streamable HTTP 上に、シンプルで機械可読なツールインターフェースを公開。
 - **自動インデックス:** 対象ディレクトリを監視し、ファイルの追加・変更・削除・リネームに応じてインデックスを自動更新（再起動は不要）。イベントはデバウンスされ、バッチ処理によって効率的に反映されます。
 - **安全性:** `read_file` はインデックスに登録済みのパスのみを返します。すなわち、インデックスへの登録がアクセス許可そのものになります。
 - **設定可能:** TOML 設定ファイルでツールの説明文をカスタマイズし、AI モデルの挙動を調整可能。
@@ -35,14 +35,20 @@ cargo install terrain
 terrain = { version = "0.2", default-features = false }
 ```
 
-デフォルトフィーチャーを無効にすると、CLI が使用する `clap` と `notify` への依存が外れ、組み込みに適した軽量なライブラリになります。
+デフォルトフィーチャーを無効にすると、CLI が使用する依存（`clap`・`notify`・`axum`）と同梱の `traverze` プロバイダが外れ、自前の検索エンジンを持ち込む前提の軽量なライブラリになります。必要に応じてフィーチャー単位で有効化できます。
+
+- `bundled-provider` — リファレンス実装の `TraverzeProvider` と `resolve_dir` / `build_engine`。
+- `streamable-http` — `streamable_http_service` ヘルパー（Streamable HTTP トランスポート）。
 
 ライブラリは以下の公開 API を提供します。
 
 - `Config` — TOML 設定ファイルの読み込みとパース。
-- `TerrainServer` — `rmcp` のトランスポートに組み込める MCP サーバーハンドラ。`TerrainServer::new(engine, indexed_paths, &config)` で構築します。
-- `IndexedPaths` — 現在インデックスに登録されているパスを保持する、クローン可能で共有可能な集合。`read_file` はこの集合を参照して読み取りを認可するため、組み込みアプリ側はパスを登録することでアクセスを制御します。
-- `resolve_dir` / `build_engine` — ディレクトリ解決と検索エンジン初期化のためのユーティリティ関数。`build_engine` は渡されたインデックスディレクトリをリセットしてゼロから再構築するため、インデックスは常に渡したファイルのみを反映します。
+- `KnowledgeProvider` — `search` / `read_file` ツールを支える trait。`SearchHit`・`SearchOptions`・`FileContent` 型を伴います。これを実装することで、独自の検索エンジンとアクセス制御ポリシーを差し込めます。
+- `TerrainServer` — `rmcp` のトランスポートに組み込める MCP サーバーハンドラ。`TerrainServer::new(provider, &config)`（`provider` は `Arc<dyn KnowledgeProvider>`）で構築します。
+- `IndexedPaths` — 現在インデックスに登録されているパスを保持する、クローン可能で共有可能な集合。同梱プロバイダはこの集合を参照して `read_file` の読み取りを認可するため、組み込みアプリ側はパスを登録することでアクセスを制御します。
+- `serve_io` — 任意の `rmcp` I/O トランスポート（stdio・パイプ・ソケット）上でサーバーを給仕します。
+- `streamable_http_service` *(`streamable-http` フィーチャー)* — 自前の HTTP サーバー（`axum`/`hyper` など）に組み込める `rmcp` の Streamable HTTP tower `Service` を構築します。
+- `TraverzeProvider` / `resolve_dir` / `build_engine` *(`bundled-provider` フィーチャー)* — `traverze` を基盤とするリファレンスプロバイダと、ディレクトリ解決・エンジン初期化のためのユーティリティ。`build_engine` は渡されたインデックスディレクトリをリセットしてゼロから再構築するため、インデックスは常に渡したファイルのみを反映します。
 
 ライブラリ自体はディレクトリの走査やファイルシステムの監視を行いません。どのファイルをいつ登録・再インデックスするかは組み込みアプリが決定します。`.md` ファイルのディレクトリを走査し、[`notify`](https://crates.io/crates/notify) でインデックスを同期し続ける統合例については [src/main.rs](src/main.rs) を参照してください。
 
@@ -62,6 +68,18 @@ Claude Desktop などの MCP 対応クライアントで `terrain` を使うに�
 ```
 
 `cargo install` を使わずにソースからビルドした場合は、代わりに実行ファイルへのフルパス（例: `"/path/to/terrain"`）を指定してください。
+
+ネットワーク経由で接続するクライアントの場合は、HTTP トランスポートでサーバーを起動し（[トランスポート](#トランスポート)を参照）、コマンドの代わりにエンドポイント URL を指定します。
+
+```json
+{
+  "mcpServers": {
+    "terrain": {
+      "url": "http://127.0.0.1:8000/mcp"
+    }
+  }
+}
+```
 
 ## 使い方
 
@@ -90,6 +108,36 @@ Claude Desktop などの MCP 対応クライアントで `terrain` を使うに�
 
 4.  **MCP 経由での操作:**
     インデックス化が完了すると、サーバーは `stdin` で MCP の JSON リクエストを待ち受け、`stdout` にレスポンスを返します。このインターフェースは任意の MCP 対応クライアントやコントローラから利用できます。
+
+## トランスポート
+
+`terrain` は MCP を 2 つのトランスポートで提供し、`--transport` で選択します。
+
+- `stdio`（デフォルト） — 標準入出力で通信します。多くの MCP クライアント（Claude Desktop など）はサーバーをサブプロセスとして起動するため、こちらを使います。
+- `http` — [Streamable HTTP トランスポート](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http) を `/mcp` で提供し、クライアントがネットワーク経由で接続できます。
+
+### Streamable HTTP
+
+```bash
+# 127.0.0.1:8000 で待ち受け（このマシンのみ）
+terrain --dir /path/to/your/notes --transport http
+
+# ポートを変更
+terrain --dir /path/to/your/notes --transport http --port 9000
+
+# 他のマシンから到達可能にする（0.0.0.0 に bind）
+terrain --dir /path/to/your/notes --transport http --host
+```
+
+エンドポイントは `http://<host>:<port>/mcp` です。
+
+| フラグ | デフォルト | 説明 |
+|------|---------|-------------|
+| `--transport <stdio\|http>` | `stdio` | 給仕するトランスポート。 |
+| `--port <PORT>` | `8000` | `http` トランスポートのポート。 |
+| `--host [ADDR]` | `127.0.0.1` | `http` の bind アドレス。省略でローカルのみ。値なしで付けると `0.0.0.0`（他のマシンから到達可能）。アドレスを渡すと特定のインターフェースに bind。 |
+
+> **セキュリティ:** `terrain` には認証機構がありません。到達範囲は bind アドレスだけで決まります。デフォルト（`127.0.0.1`）ではサーバーはこのマシン内に閉じています。`--host` は信頼できるネットワークでのみ使用し、認証付きの公開が必要な場合はリバースプロキシ・SSH トンネル・VPN などの背後に `terrain` を置いてください。
 
 ## 設定
 

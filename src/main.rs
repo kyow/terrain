@@ -6,12 +6,26 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use notify::event::{CreateKind, RemoveKind, RenameMode};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use rmcp::{ServiceExt, transport::stdio};
-use terrain::{Config, IndexedPaths, TerrainServer, build_engine, resolve_dir};
+use std::sync::Arc;
+
+use terrain::rmcp::transport::stdio;
+use terrain::{
+    Config, IndexedPaths, StreamableHttpServerConfig, TerrainServer, TraverzeProvider, build_engine,
+    resolve_dir, serve_io, streamable_http_service,
+};
 use traverze::Traverze;
+
+/// Transport the MCP server speaks over.
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum Transport {
+    /// Standard input/output (default; used by most MCP clients).
+    Stdio,
+    /// Streamable HTTP, served at `/mcp`.
+    Http,
+}
 
 /// terrain MCP server – Markdown full-text search
 #[derive(Parser)]
@@ -23,6 +37,21 @@ struct Cli {
     /// Path to a TOML config file for customizing tool description
     #[arg(long)]
     config: Option<PathBuf>,
+    /// Transport to serve over.
+    #[arg(long, value_enum, default_value_t = Transport::Stdio)]
+    transport: Transport,
+    /// Port to listen on when using the `http` transport.
+    #[arg(long, default_value_t = 8000)]
+    port: u16,
+    /// Address to bind when using the `http` transport.
+    ///
+    /// Omit to listen on `127.0.0.1` (this machine only). Pass the flag with no
+    /// value to listen on `0.0.0.0` (reachable from other machines). Pass an
+    /// explicit address to bind a specific interface. terrain has no
+    /// authentication, so only expose it on a trusted network or behind a
+    /// reverse proxy / tunnel.
+    #[arg(long, num_args = 0..=1, default_missing_value = "0.0.0.0")]
+    host: Option<String>,
 }
 
 #[tokio::main]
@@ -52,10 +81,47 @@ async fn main() -> Result<()> {
         .context("failed to start file watcher")?;
     eprintln!("watching {} for changes", target_dir.display());
 
-    let server = TerrainServer::new(engine, indexed_paths, &config)
-        .serve(stdio())
-        .await?;
-    server.waiting().await?;
+    let provider = Arc::new(TraverzeProvider::new(engine, indexed_paths));
+    let server = TerrainServer::new(provider, &config);
+
+    match cli.transport {
+        Transport::Stdio => serve_io(server, stdio()).await?,
+        Transport::Http => serve_http(server, &cli).await?,
+    }
+    Ok(())
+}
+
+/// Serve over Streamable HTTP at `/mcp`, listening until Ctrl-C.
+async fn serve_http(server: TerrainServer, cli: &Cli) -> Result<()> {
+    // Reachability is governed solely by the bind address. The `Host` header
+    // check is not access control, so we disable it and let `--host` decide who
+    // can reach the server.
+    let config = StreamableHttpServerConfig::default().disable_allowed_hosts();
+    let service = streamable_http_service(server, config);
+
+    let app = axum::Router::new()
+        .nest_service("/mcp", service)
+        .layer(axum::middleware::from_fn(log_request));
+
+    let bind_host = cli.host.as_deref().unwrap_or("127.0.0.1");
+    let addr = format!("{bind_host}:{}", cli.port);
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .with_context(|| format!("failed to bind {addr}"))?;
+
+    eprintln!("serving MCP over Streamable HTTP at http://{addr}/mcp");
+
+    // `into_make_service_with_connect_info` makes the peer address available to
+    // `log_request` via `ConnectInfo`.
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async {
+        let _ = tokio::signal::ctrl_c().await;
+    })
+    .await
+    .context("HTTP server terminated unexpectedly")?;
     Ok(())
 }
 
@@ -70,6 +136,48 @@ fn index_dir_for(target_dir: &Path) -> PathBuf {
     env::temp_dir()
         .join("terrain-index")
         .join(format!("{:016x}", hasher.finish()))
+}
+
+/// TEMPORARY trial logging (issue #10 follow-up will replace this): print the
+/// client address and the raw request body to stderr for each HTTP request, so
+/// you can see which host sent which command. stderr is used so it never clashes
+/// with the stdio transport's stdout protocol channel.
+async fn log_request(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let peer = req
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|ci| ci.0.to_string())
+        .unwrap_or_else(|| "?".to_string());
+
+    let (parts, body) = req.into_parts();
+    // Buffer the body so we can log it, then hand a fresh copy downstream.
+    // Capped at 1 MiB; oversized bodies are dropped (fine for this trial).
+    let bytes = axum::body::to_bytes(body, 1024 * 1024)
+        .await
+        .unwrap_or_default();
+
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+    let command = String::from_utf8_lossy(&bytes);
+    let command = command.trim();
+    if command.is_empty() {
+        eprintln!("[{now}] http: {} {} from {peer}", parts.method, parts.uri.path());
+    } else {
+        let shown: String = command.chars().take(500).collect();
+        eprintln!(
+            "[{now}] http: {} {} from {peer} command={shown}",
+            parts.method,
+            parts.uri.path()
+        );
+    }
+
+    next.run(axum::extract::Request::from_parts(
+        parts,
+        axum::body::Body::from(bytes),
+    ))
+    .await
 }
 
 fn collect_markdown_files(base_dir: &Path) -> Result<Vec<PathBuf>> {
