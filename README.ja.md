@@ -48,7 +48,7 @@ terrain = { version = "0.2", default-features = false }
 - `IndexedPaths` — 現在インデックスに登録されているパスを保持する、クローン可能で共有可能な集合。同梱プロバイダはこの集合を参照して `read_file` の読み取りを認可するため、組み込みアプリ側はパスを登録することでアクセスを制御します。
 - `serve_io` — 任意の `rmcp` I/O トランスポート（stdio・パイプ・ソケット）上でサーバーを給仕します。
 - `streamable_http_service` *(`streamable-http` フィーチャー)* — 自前の HTTP サーバー（`axum`/`hyper` など）に組み込める `rmcp` の Streamable HTTP tower `Service` を構築します。
-- `TraverzeProvider` / `resolve_dir` / `build_engine` *(`bundled-provider` フィーチャー)* — `traverze` を基盤とするリファレンスプロバイダと、ディレクトリ解決・エンジン初期化のためのユーティリティ。
+- `TraverzeProvider` / `resolve_dir` / `build_engine` *(`bundled-provider` フィーチャー)* — `traverze` を基盤とするリファレンスプロバイダと、ディレクトリ解決・エンジン初期化のためのユーティリティ。`build_engine` は渡されたインデックスディレクトリをリセットしてゼロから再構築するため、インデックスは常に渡したファイルのみを反映します。
 
 ライブラリ自体はディレクトリの走査やファイルシステムの監視を行いません。どのファイルをいつ登録・再インデックスするかは組み込みアプリが決定します。`.md` ファイルのディレクトリを走査し、[`notify`](https://crates.io/crates/notify) でインデックスを同期し続ける統合例については [src/main.rs](src/main.rs) を参照してください。
 

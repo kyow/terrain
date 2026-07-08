@@ -454,8 +454,16 @@ pub fn resolve_dir(dir: &Path) -> Result<PathBuf> {
 }
 
 /// Create a `Traverze` engine and index the given files.
+///
+/// Any existing index in `index_dir` is **deleted** first, so the resulting
+/// index reflects only `files`. Without this reset, documents indexed by
+/// previous runs would persist and leak into search results.
 #[cfg(feature = "bundled-provider")]
 pub fn build_engine(index_dir: &Path, files: &[PathBuf]) -> Result<(Traverze, usize)> {
+    if index_dir.exists() {
+        fs::remove_dir_all(index_dir)
+            .with_context(|| format!("failed to reset index dir: {}", index_dir.display()))?;
+    }
     let engine = Traverze::new_in_dir_for_indexing(index_dir, TokenizerMode::LinderaIpadic, true)
         .context("traverze index initialization failed")?;
     let indexed = engine

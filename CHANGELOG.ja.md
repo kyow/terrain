@@ -25,6 +25,12 @@
 - config のツール説明を、フラットな `search_description` / `read_file_description` キーから、ツールごとの `[tools.<name>]` テーブル（例: `[tools.search] description = "…"`）へ移動。ツールが増えてもカスタマイズを一般化できるように
 - デフォルトの `serverInfo` が `rmcp` ではなく terrain 自身の name/version を報告するよう変更
 
+## [0.2.2] - 2026-07-08
+
+### Fixed
+
+- `search` が過去の実行で提供していたディレクトリの古い結果を返さないよう修正: `build_engine` がインデックス作成前にインデックスディレクトリをリセットし、CLI は正規化した `--dir` ごとにインデックスディレクトリを分離することで、同時起動したサーバー同士がインデックスを壊し合わないようにした
+
 ## [0.2.1] - 2026-06-26
 
 ### Changed
@@ -65,7 +71,8 @@
 - `clap` 依存をオプショナルにする `cli` フィーチャーフラグ
 - Apache 2.0 および MIT デュアルライセンス
 
-[unreleased]: https://github.com/kyow/terrain/compare/v0.2.1...HEAD
+[unreleased]: https://github.com/kyow/terrain/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/kyow/terrain/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/kyow/terrain/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kyow/terrain/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kyow/terrain/releases/tag/v0.1.0

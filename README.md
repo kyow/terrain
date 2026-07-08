@@ -48,7 +48,7 @@ The library exposes the following public API:
 - `IndexedPaths` — A cloneable, shared set of paths currently registered in the index. The bundled provider consults this set to authorize `read_file` reads, so the embedding app controls access by registering paths.
 - `serve_io` — Serve the server over any `rmcp` I/O transport (stdio, a pipe, or a socket).
 - `streamable_http_service` *(feature `streamable-http`)* — Build an `rmcp` Streamable HTTP tower `Service` to mount into your own HTTP server (e.g. `axum`/`hyper`).
-- `TraverzeProvider` / `resolve_dir` / `build_engine` *(feature `bundled-provider`)* — The reference provider backed by `traverze`, plus directory-resolution and engine-initialization helpers.
+- `TraverzeProvider` / `resolve_dir` / `build_engine` *(feature `bundled-provider`)* — The reference provider backed by `traverze`, plus directory-resolution and engine-initialization helpers. `build_engine` resets the given index directory and rebuilds it from scratch, so the index only ever reflects the files passed in.
 
 The library does not scan directories or watch the filesystem on its own — embedding apps decide which files to register and when to re-index. See [src/main.rs](src/main.rs) for a reference integration that walks a directory of `.md` files and keeps the index in sync via [`notify`](https://crates.io/crates/notify).
 

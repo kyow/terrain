@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config tool descriptions moved from the flat `search_description` / `read_file_description` keys to a per-tool `[tools.<name>]` table (e.g. `[tools.search] description = "…"`); this generalizes tool customization as more tools are added
 - Default `serverInfo` now reports terrain's own name and version instead of `rmcp`'s
 
+## [0.2.2] - 2026-07-08
+
+### Fixed
+
+- `search` no longer returns stale results from directories served by previous runs: `build_engine` now resets the index directory before indexing, and the CLI namespaces the index directory per canonicalized `--dir` so concurrent servers do not clobber each other's index
+
 ## [0.2.1] - 2026-06-26
 
 ### Changed
@@ -65,7 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional `cli` feature flag for `clap` dependency
 - Apache 2.0 and MIT dual license
 
-[unreleased]: https://github.com/kyow/terrain/compare/v0.2.1...HEAD
+[unreleased]: https://github.com/kyow/terrain/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/kyow/terrain/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/kyow/terrain/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kyow/terrain/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kyow/terrain/releases/tag/v0.1.0

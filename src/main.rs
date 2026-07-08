@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -63,7 +64,7 @@ async fn main() -> Result<()> {
     };
     let markdown_files = collect_markdown_files(&target_dir)?;
 
-    let index_dir = env::temp_dir().join("terrain-index");
+    let index_dir = index_dir_for(&target_dir);
     let (engine, indexed) =
         build_engine(&index_dir, &markdown_files).context("failed to build search engine")?;
 
@@ -122,6 +123,19 @@ async fn serve_http(server: TerrainServer, cli: &Cli) -> Result<()> {
     .await
     .context("HTTP server terminated unexpectedly")?;
     Ok(())
+}
+
+/// Per-`--dir` index location under the system temp directory.
+///
+/// Namespacing by the canonicalized target directory keeps concurrent
+/// servers for different directories from clobbering each other's index
+/// (`build_engine` deletes the index dir on startup).
+fn index_dir_for(target_dir: &Path) -> PathBuf {
+    let mut hasher = DefaultHasher::new();
+    target_dir.hash(&mut hasher);
+    env::temp_dir()
+        .join("terrain-index")
+        .join(format!("{:016x}", hasher.finish()))
 }
 
 /// TEMPORARY trial logging (issue #10 follow-up will replace this): print the
