@@ -1,3 +1,5 @@
+#![cfg(feature = "bundled-provider")]
+
 use std::fs;
 use std::path::PathBuf;
 
