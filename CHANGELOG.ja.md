@@ -24,6 +24,8 @@
 - `traverze` を `bundled-provider` フィーチャー配下のオプショナル依存に変更し、組み込みアプリが `traverze` を引き込まずに terrain へ依存できるように。`build_engine` も同フィーチャーで gate
 - config のツール説明を、フラットな `search_description` / `read_file_description` キーから、ツールごとの `[tools.<name>]` テーブル（例: `[tools.search] description = "…"`）へ移動。ツールが増えてもカスタマイズを一般化できるように
 - デフォルトの `serverInfo` が `rmcp` ではなく terrain 自身の name/version を報告するよう変更
+- `rmcp` を 1.7 → 2.2 に更新（terrain 側のソース変更は不要、JSON の wire format も不変）。rmcp 由来の挙動変化として、2.x は stdio 上のパース不能な JSON-RPC 行を黙って無視する（1.x は `Parse error` を返していた）
+- `tokio` のバージョン要求を `1.47.1` から `1` に緩和し、他の依存指定と粒度を統一（バージョン指定は下限のため、解決されるバージョンに変更なし）
 
 ### Fixed
 
