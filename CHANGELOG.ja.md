@@ -25,6 +25,10 @@
 - config のツール説明を、フラットな `search_description` / `read_file_description` キーから、ツールごとの `[tools.<name>]` テーブル（例: `[tools.search] description = "…"`）へ移動。ツールが増えてもカスタマイズを一般化できるように
 - デフォルトの `serverInfo` が `rmcp` ではなく terrain 自身の name/version を報告するよう変更
 
+### Fixed
+
+- `tests/build_engine.rs` を `bundled-provider` フィーチャーで gate し、`cargo check --tests --no-default-features` が再びコンパイルできるよう修正
+
 ## [0.2.2] - 2026-07-08
 
 ### Fixed

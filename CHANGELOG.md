@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config tool descriptions moved from the flat `search_description` / `read_file_description` keys to a per-tool `[tools.<name>]` table (e.g. `[tools.search] description = "…"`); this generalizes tool customization as more tools are added
 - Default `serverInfo` now reports terrain's own name and version instead of `rmcp`'s
 
+### Fixed
+
+- `tests/build_engine.rs` is now gated behind the `bundled-provider` feature, so `cargo check --tests --no-default-features` compiles again
+
 ## [0.2.2] - 2026-07-08
 
 ### Fixed
