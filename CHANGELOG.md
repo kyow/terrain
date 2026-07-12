@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `traverze` is now an optional dependency behind the `bundled-provider` feature, so embedding apps can depend on terrain without pulling in `traverze`; `build_engine` is gated behind the same feature
 - Config tool descriptions moved from the flat `search_description` / `read_file_description` keys to a per-tool `[tools.<name>]` table (e.g. `[tools.search] description = "…"`); this generalizes tool customization as more tools are added
 - Default `serverInfo` now reports terrain's own name and version instead of `rmcp`'s
+- Updated `rmcp` 1.7 → 2.2 (no source changes required; the JSON wire format is unchanged). Inherited behavior change: rmcp 2.x silently ignores unparseable JSON-RPC lines on stdio, where 1.x replied with a `Parse error` response
+- Relaxed the `tokio` version requirement from `1.47.1` to `1` to match the granularity of the other dependency specs (version requirements are lower bounds; the resolved version is unchanged)
 
 ### Fixed
 
