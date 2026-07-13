@@ -2,18 +2,23 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
-use rmcp::handler::server::tool::ToolRouter;
+use rmcp::handler::server::tool::{ToolCallContext, ToolRouter};
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
+use rmcp::model::{
+    CallToolRequestParams, CallToolResult, Implementation, JsonObject, ServerCapabilities,
+    ServerInfo,
+};
+use rmcp::service::RequestContext;
 use rmcp::transport::IntoTransport;
 #[cfg(feature = "streamable-http")]
 use rmcp::transport::streamable_http_server::{
     StreamableHttpService, session::local::LocalSessionManager,
 };
-use rmcp::{RoleServer, ServerHandler, ServiceExt, tool, tool_handler, tool_router};
+use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt, tool, tool_handler, tool_router};
 
 // Re-exported so callers can construct/customize the HTTP server config without
 // naming an rmcp path of their own (keeps the rmcp version aligned with terrain).
@@ -217,6 +222,42 @@ struct ReadFileParams {
 }
 
 // ---------------------------------------------------------------------------
+// Tool-call observation
+// ---------------------------------------------------------------------------
+
+/// A completed tool call, observed at the handler layer.
+///
+/// One event is emitted per `tools/call` round-trip and carries both the
+/// input arguments and the outcome, so a subscriber can render each call as
+/// a single self-contained entry. Because the hook sits in the handler
+/// rather than the transport, the same events fire however the server is
+/// served — stdio, an in-process stream, or Streamable HTTP.
+#[non_exhaustive]
+pub struct ToolCallEvent<'a> {
+    /// Name of the tool that was called (e.g. `search`).
+    pub tool_name: &'a str,
+    /// Arguments the client passed, if any.
+    pub arguments: Option<&'a JsonObject>,
+    /// The call's outcome. `Ok` is the result returned to the client; tool
+    /// execution failures are reported there via [`CallToolResult::is_error`],
+    /// not as `Err`. `Err` is a protocol-level error (unknown tool name,
+    /// invalid parameters).
+    pub outcome: Result<&'a CallToolResult, &'a ErrorData>,
+    /// Wall-clock time the call took.
+    pub duration: Duration,
+}
+
+/// Receives a [`ToolCallEvent`] for every tool call handled by a
+/// [`TerrainServer`], letting an embedding host display MCP traffic in its
+/// own UI.
+///
+/// Called synchronously on the request path: implementations must not block.
+/// Hand the event off (e.g. into a channel or a UI event emitter) and return.
+pub trait ToolCallObserver: Send + Sync {
+    fn on_tool_call(&self, event: &ToolCallEvent<'_>);
+}
+
+// ---------------------------------------------------------------------------
 // TerrainServer
 // ---------------------------------------------------------------------------
 
@@ -226,6 +267,7 @@ pub struct TerrainServer {
     tool_router: ToolRouter<Self>,
     instructions: String,
     server_info: Implementation,
+    observer: Option<Arc<dyn ToolCallObserver>>,
 }
 
 #[tool_router]
@@ -271,6 +313,32 @@ impl TerrainServer {
 
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for TerrainServer {
+    // Hand-written so the observer sees every tool call; #[tool_handler]
+    // skips generating `call_tool` when the impl block already has one.
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let Some(observer) = &self.observer else {
+            let tcc = ToolCallContext::new(self, request, context);
+            return self.tool_router.call(tcc).await;
+        };
+
+        let tool_name = request.name.clone();
+        let arguments = request.arguments.clone();
+        let started = Instant::now();
+        let tcc = ToolCallContext::new(self, request, context);
+        let result = self.tool_router.call(tcc).await;
+        observer.on_tool_call(&ToolCallEvent {
+            tool_name: &tool_name,
+            arguments: arguments.as_ref(),
+            outcome: result.as_ref(),
+            duration: started.elapsed(),
+        });
+        result
+    }
+
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::default();
         info.capabilities = ServerCapabilities::builder().enable_tools().build();
@@ -313,7 +381,15 @@ impl TerrainServer {
             tool_router: router,
             instructions,
             server_info,
+            observer: None,
         }
+    }
+
+    /// Register an observer that receives one [`ToolCallEvent`] per handled
+    /// tool call. Replaces any previously registered observer.
+    pub fn with_observer(mut self, observer: Arc<dyn ToolCallObserver>) -> Self {
+        self.observer = Some(observer);
+        self
     }
 }
 

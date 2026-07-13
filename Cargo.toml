@@ -41,3 +41,4 @@ traverze = { version = "0.2.0", features = ["tokenizer-lindera-ipadic"], optiona
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { version = "1", features = ["io-util", "time"] }
