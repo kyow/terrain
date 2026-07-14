@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streamable HTTP transport: serve MCP over HTTP at `/mcp` with `--transport http`, plus `--port` and `--host` flags to control the bind address (`--host` with no value binds `0.0.0.0` for access from other machines)
 - `streamable_http_service` helper and the `streamable-http` feature to build an `rmcp` Streamable HTTP tower `Service` for mounting into your own HTTP server (e.g. `axum`/`hyper`)
 - Config `[server]` table to override the MCP `serverInfo` name and version, so embedding hosts can identify themselves by their own name/version
+- `ToolCallObserver` trait, `ToolCallEvent`, and `TerrainServer::with_observer` to observe each tool call (input arguments and outcome) at the handler layer, so embedding hosts can display MCP traffic in their own UI; the hook fires regardless of transport (stdio, in-process stream, or Streamable HTTP)
 
 ### Changed
 
