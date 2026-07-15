@@ -3181,9 +3181,9 @@ dependencies = [
 
 [[package]]
 name = "traverze"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "260ab628de158963c04d00894f95796a1109606ced42fd8fc48e83717a873b6e"
+checksum = "a1889dde90c149b9d4654f16c44759809c5ae1f5106cc85b68ac6b2ef338b07b"
 dependencies = [
  "anyhow",
  "clap",

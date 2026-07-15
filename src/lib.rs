@@ -33,7 +33,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "bundled-provider")]
 use traverze::{
-    SearchOptions as TraverzeSearchOptions, SnippetFormat, SnippetOptions, TokenizerMode, Traverze,
+    QueryPreprocess, SearchOptions as TraverzeSearchOptions, SnippetFormat, SnippetOptions,
+    TokenizerMode, Traverze,
 };
 
 // ---------------------------------------------------------------------------
@@ -206,7 +207,9 @@ pub trait KnowledgeProvider: Send + Sync {
 
 #[derive(Deserialize, JsonSchema)]
 struct SearchParams {
-    /// The search query string. You can specify multiple keywords separated by spaces.
+    /// The search query string. You can specify multiple keywords separated by spaces;
+    /// they are OR-combined and documents matching more keywords rank higher, so when
+    /// unsure of the exact wording, list several candidate keywords or synonyms.
     /// Japanese text is fully supported and accurately tokenized using morphological analysis.
     query: String,
     /// The maximum number of search results to return (default: 20).
@@ -276,7 +279,7 @@ impl TerrainServer {
     /// and snippets.
     #[tool(
         name = "search",
-        description = "Search local Markdown files (knowledge base) using full-text search. This engine is highly optimized for Japanese text using morphological analysis, so you can confidently pass natural Japanese keywords, phrases, or technical terms. Use this as your first action to find relevant context to answer the user's question. It returns a list of matching absolute file paths, relevance scores, and surrounding text snippets."
+        description = "Search local Markdown files (knowledge base) using full-text search. This engine is highly optimized for Japanese text using morphological analysis, so you can confidently pass natural Japanese keywords, phrases, or technical terms. Space-separated keywords are OR-combined and ranked (BM25): documents matching more keywords score higher, so listing several candidate keywords or synonyms is a good strategy when you are unsure of the exact wording. Use this as your first action to find relevant context to answer the user's question. It returns a list of matching absolute file paths, relevance scores, and surrounding text snippets."
     )]
     async fn search(&self, Parameters(params): Parameters<SearchParams>) -> Result<String, String> {
         let options = SearchOptions {
@@ -484,8 +487,12 @@ impl KnowledgeProvider for TraverzeProvider {
         let options = TraverzeSearchOptions {
             limit: opts.limit,
             snippet,
+            // Plain keeps the OR-with-ranking semantics MCP hosts rely on when
+            // they send several speculative keywords; Auto would AND all tokens
+            // together and zero-hit those queries.
+            query_preprocess: QueryPreprocess::Plain,
         };
-        let hits = self.engine.search_with_options(query, options)?;
+        let hits = self.engine.search(query, options)?;
         Ok(hits
             .into_iter()
             .map(|h| SearchHit {
@@ -540,10 +547,12 @@ pub fn build_engine(index_dir: &Path, files: &[PathBuf]) -> Result<(Traverze, us
         fs::remove_dir_all(index_dir)
             .with_context(|| format!("failed to reset index dir: {}", index_dir.display()))?;
     }
-    let engine = Traverze::new_in_dir_for_indexing(index_dir, TokenizerMode::LinderaIpadic, true)
+    let engine = Traverze::builder()
+        .index_dir(index_dir)
+        .mode(TokenizerMode::LinderaIpadic)
+        .with_snippet(true)
+        .open()
         .context("traverze index initialization failed")?;
-    let indexed = engine
-        .index_files(files)
-        .context("failed to index files")?;
+    let indexed = engine.index(files).context("failed to index files")?;
     Ok((engine, indexed))
 }

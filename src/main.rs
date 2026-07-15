@@ -284,15 +284,15 @@ fn start_watcher(
                     for path in &to_remove {
                         indexed_paths.remove(path);
                     }
-                    match engine.remove_files(&to_remove) {
+                    match engine.remove(&to_remove) {
                         Ok(n) => eprintln!("watcher: removed {} file(s) from index", n),
                         Err(e) => eprintln!("watcher: remove error: {e}"),
                     }
                 }
 
                 if !to_index.is_empty() {
-                    let _ = engine.remove_files(&to_index);
-                    match engine.index_files(&to_index) {
+                    let _ = engine.remove(&to_index);
+                    match engine.index(&to_index) {
                         Ok(n) => {
                             indexed_paths.extend(to_index.iter().cloned());
                             eprintln!("watcher: re-indexed {} file(s)", n);

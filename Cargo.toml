@@ -37,7 +37,7 @@ toml = "1"
 notify = { version = "8", optional = true }
 axum = { version = "0.8", optional = true }
 chrono = { version = "0.4", optional = true }
-traverze = { version = "0.2.0", features = ["tokenizer-lindera-ipadic"], optional = true }
+traverze = { version = "0.3", features = ["tokenizer-lindera-ipadic"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
