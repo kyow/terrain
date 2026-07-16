@@ -159,7 +159,7 @@ Search indexed Markdown files and return matching file paths, scores, and snippe
 
 - **Description:** This tool is highly optimized for Japanese text. Use it to find relevant context to answer a user's question. It returns a list of matching absolute file paths, relevance scores, and surrounding text snippets.
 - **Parameters:**
-    - `query` (string, required): The search query. You can specify multiple keywords separated by spaces.
+    - `query` (string, required): The search query. You can specify multiple keywords separated by spaces; they are OR-combined and ranked by BM25, so documents matching more keywords score higher.
     - `limit` (integer, optional): The maximum number of search results to return (default: 20).
 - **Example Return Value:**
     ```json
