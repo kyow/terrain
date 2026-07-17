@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default `serverInfo` now reports terrain's own name and version instead of `rmcp`'s
 - Updated `rmcp` 1.7 → 2.2 (no source changes required; the JSON wire format is unchanged). Inherited behavior change: rmcp 2.x silently ignores unparseable JSON-RPC lines on stdio, where 1.x replied with a `Parse error` response
 - Relaxed the `tokio` version requirement from `1.47.1` to `1` to match the granularity of the other dependency specs (version requirements are lower bounds; the resolved version is unchanged)
+- Updated `traverze` 0.2 → 0.3, following its renamed API (builder-based construction, `index_files`/`remove_files` → `index`/`remove`, `search_with_options` merged into `search`). Query preprocessing is explicitly pinned to `Plain`, keeping the 0.2 search semantics — space-separated keywords are OR-combined and ranked by BM25 — instead of 0.3's new `Auto` mode, which ANDs all tokens together and would zero-hit the speculative multi-keyword queries MCP hosts typically send. Inherited improvement: query parsing is now lenient, so queries containing Tantivy syntax characters no longer hard-fail
+- The `search` tool description (built-in default, example config, and README) now documents the OR + BM25 semantics, so MCP hosts know that listing several candidate keywords or synonyms is a good strategy
 
 ### Fixed
 

@@ -27,6 +27,8 @@
 - デフォルトの `serverInfo` が `rmcp` ではなく terrain 自身の name/version を報告するよう変更
 - `rmcp` を 1.7 → 2.2 に更新（terrain 側のソース変更は不要、JSON の wire format も不変）。rmcp 由来の挙動変化として、2.x は stdio 上のパース不能な JSON-RPC 行を黙って無視する（1.x は `Parse error` を返していた）
 - `tokio` のバージョン要求を `1.47.1` から `1` に緩和し、他の依存指定と粒度を統一（バージョン指定は下限のため、解決されるバージョンに変更なし）
+- `traverze` を 0.2 → 0.3 に更新し、API 変更（ビルダーによる構築、`index_files`/`remove_files` → `index`/`remove` への改名、`search_with_options` の `search` への一本化）に追従。クエリ前処理は `Plain` を明示指定し、0.3 の新しい `Auto` モード（全トークンを AND 結合するため、MCP ホストが投げがちな投機的な複数キーワードクエリがゼロヒットになる）ではなく、0.2 と同じ検索セマンティクス（空白区切りキーワードの OR 結合 + BM25 ランキング）を維持。traverze 由来の改善として、クエリパースが lenient になり、Tantivy の構文文字を含むクエリがエラーにならなくなった
+- `search` ツールの description（組み込みデフォルト・設定例・README）に OR + BM25 のセマンティクスを明記し、MCP ホストが同義語や候補キーワードを複数並べる戦略を取れることが伝わるように
 
 ### Fixed
 
