@@ -13,14 +13,14 @@ instructions = "terrain MCP server – search and read indexed Markdown files"
 # instead of terrain's defaults. Omit the table to report terrain's own name and
 # version.
 [server]
-name = "terrain"
-version = "0.2.1"
+name = "your-knowledge-base"
+version = "1.0.0"
 
 # Per-tool overrides, keyed by tool name. Unknown tool names are ignored.
 
 # Description for the "search" tool.
 [tools.search]
-description = "Search local Markdown files (knowledge base) using full-text search. This engine is highly optimized for Japanese text using morphological analysis, so you can confidently pass natural Japanese keywords, phrases, or technical terms. Use this as your first action to find relevant context to answer the user's question. It returns a list of matching absolute file paths, relevance scores, and surrounding text snippets."
+description = "Search local Markdown files (knowledge base) using full-text search. This engine is highly optimized for Japanese text using morphological analysis, so you can confidently pass natural Japanese keywords, phrases, or technical terms. Space-separated keywords are OR-combined and ranked (BM25): documents matching more keywords score higher, so listing several candidate keywords or synonyms is a good strategy when you are unsure of the exact wording. Use this as your first action to find relevant context to answer the user's question. It returns a list of matching absolute file paths, relevance scores, and surrounding text snippets."
 
 # Description for the "read_file" tool.
 [tools.read_file]

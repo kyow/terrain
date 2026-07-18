@@ -8,13 +8,7 @@ use traverze::{SearchOptions, Traverze};
 
 fn search_paths(engine: &Traverze, query: &str) -> Vec<String> {
     engine
-        .search_with_options(
-            query,
-            SearchOptions {
-                limit: 10,
-                snippet: None,
-            },
-        )
+        .search(query, SearchOptions::with_limit(10))
         .unwrap()
         .into_iter()
         .map(|h| h.path)
