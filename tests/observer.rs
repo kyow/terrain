@@ -4,6 +4,8 @@
 //! raw JSON-RPC frames (the newline-delimited framing the stdio transport
 //! uses), asserting that a registered observer sees each tool call.
 
+mod common;
+
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -12,10 +14,11 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use terrain::{
-    Config, FileContent, KnowledgeProvider, SearchHit, SearchOptions, TerrainServer, ToolCallEvent,
-    ToolCallObserver, serve_io,
+    Config, FileContent, FileList, KnowledgeProvider, ListOptions, SearchHit, SearchOptions,
+    TerrainServer, ToolCallEvent, ToolCallObserver,
 };
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, ReadHalf, WriteHalf};
+
+use common::TestClient;
 
 struct StubProvider;
 
@@ -36,6 +39,14 @@ impl KnowledgeProvider for StubProvider {
         Ok(FileContent {
             path: path.display().to_string(),
             content: "hello".to_string(),
+        })
+    }
+
+    async fn list_files(&self, opts: &ListOptions) -> Result<FileList> {
+        Ok(FileList {
+            total: 1,
+            offset: opts.offset,
+            paths: vec!["/kb/hit.md".to_string()],
         })
     }
 }
@@ -66,68 +77,12 @@ impl ToolCallObserver for RecordingObserver {
     }
 }
 
-/// Client half of the in-memory MCP session.
-struct TestClient {
-    reader: BufReader<ReadHalf<DuplexStream>>,
-    writer: WriteHalf<DuplexStream>,
-}
-
-impl TestClient {
-    async fn send(&mut self, frame: Value) {
-        let mut line = frame.to_string();
-        line.push('\n');
-        self.writer.write_all(line.as_bytes()).await.unwrap();
-    }
-
-    async fn recv(&mut self) -> Value {
-        let mut line = String::new();
-        tokio::time::timeout(Duration::from_secs(10), self.reader.read_line(&mut line))
-            .await
-            .expect("timed out waiting for a server frame")
-            .unwrap();
-        serde_json::from_str(&line).unwrap()
-    }
-
-    async fn call_tool(&mut self, id: u64, name: &str, arguments: Value) -> Value {
-        self.send(json!({
-            "jsonrpc": "2.0", "id": id, "method": "tools/call",
-            "params": {"name": name, "arguments": arguments}
-        }))
-        .await;
-        self.recv().await
-    }
-}
-
 /// Start a `TerrainServer` with `observer` on an in-memory stream and run
 /// the MCP initialization handshake.
 async fn start(observer: Arc<RecordingObserver>) -> TestClient {
     let server =
         TerrainServer::new(Arc::new(StubProvider), &Config::default()).with_observer(observer);
-    let (client_end, server_end) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(async move {
-        let _ = serve_io(server, server_end).await;
-    });
-
-    let (reader, writer) = tokio::io::split(client_end);
-    let mut client = TestClient {
-        reader: BufReader::new(reader),
-        writer,
-    };
-    client
-        .send(json!({
-            "jsonrpc": "2.0", "id": 0, "method": "initialize",
-            "params": {
-                "protocolVersion": "2025-03-26",
-                "capabilities": {},
-                "clientInfo": {"name": "observer-test", "version": "0.0.0"}
-            }
-        }))
-        .await;
-    client.recv().await;
-    client
-        .send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}))
-        .await;
-    client
+    common::start(server).await
 }
 
 fn recorded_text(result: &Value) -> String {

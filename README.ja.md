@@ -43,7 +43,7 @@ terrain = { version = "0.2", default-features = false }
 ライブラリは以下の公開 API を提供します。
 
 - `Config` — TOML 設定ファイルの読み込みとパース。
-- `KnowledgeProvider` — `search` / `read_file` ツールを支える trait。`SearchHit`・`SearchOptions`・`FileContent` 型を伴います。これを実装することで、独自の検索エンジンとアクセス制御ポリシーを差し込めます。
+- `KnowledgeProvider` — `search` / `read_file` / `list_files` ツールを支える trait。`SearchHit`・`SearchOptions`・`FileContent`・`ListOptions`・`FileList` 型を伴います。これを実装することで、独自の検索エンジンとアクセス制御ポリシーを差し込めます。
 - `TerrainServer` — `rmcp` のトランスポートに組み込める MCP サーバーハンドラ。`TerrainServer::new(provider, &config)`（`provider` は `Arc<dyn KnowledgeProvider>`）で構築します。
 - `IndexedPaths` — 現在インデックスに登録されているパスを保持する、クローン可能で共有可能な集合。同梱プロバイダはこの集合を参照して `read_file` の読み取りを認可するため、組み込みアプリ側はパスを登録することでアクセスを制御します。
 - `serve_io` — 任意の `rmcp` I/O トランスポート（stdio・パイプ・ソケット）上でサーバーを給仕します。
@@ -181,6 +181,26 @@ terrain --dir /path/to/your/notes --config terrain.config.toml
     - `path` (string, 必須): 読み取る Markdown ファイルの絶対パス。`search` ツールが返した正確なパスを使用する必要があります。
 - **戻り値の例:**
     指定した Markdown ファイルの生の全内容。
+
+### `list_files`
+
+インデックス済みの全 Markdown ファイルの絶対パスを、ソート済み・ページング付きで一覧します。
+
+- **説明:** どんなキーワードで検索すべきか分からないときに、どのような文書が存在するかを把握したり、ナレッジベースの全体像を掴んだりするために使用します。返されたパスはそのまま `read_file` ツールに渡せます。
+- **パラメータ:**
+    - `limit` (integer, 任意): 返すファイルパスの最大件数（デフォルト: 100）。0 を指定すると総件数のみを取得できます。
+    - `offset` (integer, 任意): ソート済みリストの先頭からスキップする件数（デフォルト: 0）。`limit` と組み合わせることで、大きなナレッジベースをページングして取得できます。
+- **戻り値の例:**
+    ```json
+    {
+      "total": 245,
+      "offset": 0,
+      "paths": [
+        "/path/to/your/notes/example.md",
+        "/path/to/your/notes/ideas.md"
+      ]
+    }
+    ```
 
 ## ライセンス
 

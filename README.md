@@ -43,7 +43,7 @@ Disabling default features drops the CLI dependencies (`clap`, `notify`, `axum`)
 The library exposes the following public API:
 
 - `Config` — Load and parse a TOML configuration file.
-- `KnowledgeProvider` — The trait backing the `search` / `read_file` tools, with the `SearchHit`, `SearchOptions`, and `FileContent` types. Implement it to plug in your own search engine and access-control policy.
+- `KnowledgeProvider` — The trait backing the `search` / `read_file` / `list_files` tools, with the `SearchHit`, `SearchOptions`, `FileContent`, `ListOptions`, and `FileList` types. Implement it to plug in your own search engine and access-control policy.
 - `TerrainServer` — The MCP server handler, ready to be plugged into an `rmcp` transport. Constructed with `TerrainServer::new(provider, &config)`, where `provider` is an `Arc<dyn KnowledgeProvider>`.
 - `IndexedPaths` — A cloneable, shared set of paths currently registered in the index. The bundled provider consults this set to authorize `read_file` reads, so the embedding app controls access by registering paths.
 - `serve_io` — Serve the server over any `rmcp` I/O transport (stdio, a pipe, or a socket).
@@ -181,6 +181,26 @@ Read the full contents of a specific Markdown file.
     - `path` (string, required): The absolute path of the Markdown file to read. You must use the exact path returned by the `search` tool.
 - **Example Return Value:**
     The full, raw content of the specified Markdown file.
+
+### `list_files`
+
+List the absolute paths of all indexed Markdown files, sorted and paged.
+
+- **Description:** Use this to discover what documents exist when you don't know what keywords to search for, or to get an overview of the knowledge base. Every returned path can be passed directly to the `read_file` tool.
+- **Parameters:**
+    - `limit` (integer, optional): The maximum number of file paths to return (default: 100). Set to 0 to retrieve only the total count.
+    - `offset` (integer, optional): The number of file paths to skip from the start of the sorted list (default: 0). Combine with `limit` to page through a large knowledge base.
+- **Example Return Value:**
+    ```json
+    {
+      "total": 245,
+      "offset": 0,
+      "paths": [
+        "/path/to/your/notes/example.md",
+        "/path/to/your/notes/ideas.md"
+      ]
+    }
+    ```
 
 ## License
 

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `streamable_http_service` helper and the `streamable-http` feature to build an `rmcp` Streamable HTTP tower `Service` for mounting into your own HTTP server (e.g. `axum`/`hyper`)
 - Config `[server]` table to override the MCP `serverInfo` name and version, so embedding hosts can identify themselves by their own name/version
 - `ToolCallObserver` trait, `ToolCallEvent`, and `TerrainServer::with_observer` to observe each tool call (input arguments and outcome) at the handler layer, so embedding hosts can display MCP traffic in their own UI; the hook fires regardless of transport (stdio, in-process stream, or Streamable HTTP)
+- `list_files` MCP tool to list the absolute paths of all indexed files, sorted and paged via `limit` / `offset` (`limit: 0` returns just the total count), so MCP hosts can discover what documents exist without guessing search keywords; every returned path can be passed directly to `read_file`. The `KnowledgeProvider` trait gains a required `list_files` method with the new contract types `ListOptions` and `FileList` (breaking change for external provider implementations)
 
 ### Changed
 

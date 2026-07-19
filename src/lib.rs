@@ -133,7 +133,10 @@ impl IndexedPaths {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.read().expect("indexed-paths lock poisoned").is_empty()
+        self.0
+            .read()
+            .expect("indexed-paths lock poisoned")
+            .is_empty()
     }
 }
 
@@ -185,6 +188,36 @@ pub struct FileContent {
     pub content: String,
 }
 
+/// Options controlling a [`KnowledgeProvider::list_files`] call.
+#[derive(Debug, Clone)]
+pub struct ListOptions {
+    /// Maximum number of paths to return. `0` returns no paths, which still
+    /// yields the total count.
+    pub limit: usize,
+    /// Number of paths to skip from the start of the full list.
+    pub offset: usize,
+}
+
+impl Default for ListOptions {
+    fn default() -> Self {
+        Self {
+            limit: 100,
+            offset: 0,
+        }
+    }
+}
+
+/// One page of indexed file paths returned by [`KnowledgeProvider::list_files`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileList {
+    /// Total number of indexed files, independent of paging.
+    pub total: usize,
+    /// Offset this page starts at (echoes [`ListOptions::offset`]).
+    pub offset: usize,
+    /// This page of absolute file paths.
+    pub paths: Vec<String>,
+}
+
 /// A source of searchable knowledge backing terrain's MCP tools.
 ///
 /// Implementations own the search engine and the access-control policy for
@@ -199,6 +232,13 @@ pub trait KnowledgeProvider: Send + Sync {
     ///
     /// Implementations are responsible for enforcing which paths may be read.
     async fn read_file(&self, path: &Path) -> Result<FileContent>;
+
+    /// List the paths of all indexed files, one page at a time.
+    ///
+    /// Implementations must report the un-paged total in [`FileList::total`]
+    /// and should return paths in a stable order (the bundled provider sorts
+    /// lexicographically) so offset-based paging is coherent across calls.
+    async fn list_files(&self, opts: &ListOptions) -> Result<FileList>;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +262,16 @@ struct ReadFileParams {
     /// The absolute path of the Markdown file to read.
     /// You must use the exact path returned by the 'search' tool.
     path: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct ListFilesParams {
+    /// The maximum number of file paths to return (default: 100).
+    /// Set to 0 to retrieve only the total count.
+    limit: Option<usize>,
+    /// The number of file paths to skip from the start of the sorted list (default: 0).
+    /// Combine with 'limit' to page through a large knowledge base.
+    offset: Option<usize>,
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +333,9 @@ impl TerrainServer {
     )]
     async fn search(&self, Parameters(params): Parameters<SearchParams>) -> Result<String, String> {
         let options = SearchOptions {
-            limit: params.limit.unwrap_or_else(|| SearchOptions::default().limit),
+            limit: params
+                .limit
+                .unwrap_or_else(|| SearchOptions::default().limit),
             ..SearchOptions::default()
         };
         let hits = self
@@ -311,6 +363,29 @@ impl TerrainServer {
             .map_err(|e| format!("{e:#}"))?;
 
         Ok(content.content)
+    }
+
+    /// List indexed file paths with paging metadata.
+    #[tool(
+        name = "list_files",
+        description = "List the absolute paths of all Markdown files registered in the knowledge base, sorted and paged. Use this to discover what documents exist when you don't know what keywords to search for, or to get an overview of the knowledge base. It returns the total number of indexed files ('total'), the page start position ('offset'), and one page of file paths ('paths'); any returned path can be passed directly to the 'read_file' tool. Use 'limit' and 'offset' to page through a large knowledge base instead of fetching everything at once."
+    )]
+    async fn list_files(
+        &self,
+        Parameters(params): Parameters<ListFilesParams>,
+    ) -> Result<String, String> {
+        let defaults = ListOptions::default();
+        let options = ListOptions {
+            limit: params.limit.unwrap_or(defaults.limit),
+            offset: params.offset.unwrap_or(defaults.offset),
+        };
+        let list = self
+            .provider
+            .list_files(&options)
+            .await
+            .map_err(|e| format!("list_files failed: {e:#}"))?;
+
+        serde_json::to_string_pretty(&list).map_err(|e| format!("serialization failed: {e}"))
     }
 }
 
@@ -357,13 +432,14 @@ impl TerrainServer {
 
         for (name, tool_config) in &config.tools {
             if let Some(desc) = &tool_config.description
-                && let Some(route) = router.map.get_mut(name.as_str()) {
-                    route.attr.description = Some(desc.clone().into());
-                }
+                && let Some(route) = router.map.get_mut(name.as_str())
+            {
+                route.attr.description = Some(desc.clone().into());
+            }
         }
 
         let instructions = config.instructions.clone().unwrap_or_else(|| {
-            "terrain MCP server – search and read indexed Markdown files".to_string()
+            "terrain MCP server – search, list, and read indexed Markdown files".to_string()
         });
 
         let server_info = Implementation::new(
@@ -511,12 +587,24 @@ impl KnowledgeProvider for TraverzeProvider {
             bail!("access denied: path is not in the index");
         }
 
-        let content =
-            fs::read_to_string(&canonical).context("failed to read file")?;
+        let content = fs::read_to_string(&canonical).context("failed to read file")?;
 
         Ok(FileContent {
             path: canonical.to_string_lossy().into_owned(),
             content,
+        })
+    }
+
+    async fn list_files(&self, opts: &ListOptions) -> Result<FileList> {
+        // `Traverze::list` returns every indexed path pre-sorted, which is
+        // what keeps offset paging stable across calls.
+        let all = self.engine.list()?;
+        let total = all.len();
+        let paths = all.into_iter().skip(opts.offset).take(opts.limit).collect();
+        Ok(FileList {
+            total,
+            offset: opts.offset,
+            paths,
         })
     }
 }
