@@ -13,8 +13,8 @@ use std::sync::Arc;
 
 use terrain::rmcp::transport::stdio;
 use terrain::{
-    Config, IndexedPaths, StreamableHttpServerConfig, TerrainServer, TraverzeProvider, build_engine,
-    resolve_dir, serve_io, streamable_http_service,
+    Config, IndexedPaths, StreamableHttpServerConfig, TerrainServer, TraverzeProvider,
+    build_engine, resolve_dir, serve_io, streamable_http_service,
 };
 use traverze::Traverze;
 
@@ -163,7 +163,11 @@ async fn log_request(
     let command = String::from_utf8_lossy(&bytes);
     let command = command.trim();
     if command.is_empty() {
-        eprintln!("[{now}] http: {} {} from {peer}", parts.method, parts.uri.path());
+        eprintln!(
+            "[{now}] http: {} {} from {peer}",
+            parts.method,
+            parts.uri.path()
+        );
     } else {
         let shown: String = command.chars().take(500).collect();
         eprintln!(
@@ -262,9 +266,7 @@ fn start_watcher(
                 // Adds: canonicalize so the stored form matches read_file lookups.
                 let to_index: Vec<PathBuf> = pending
                     .iter()
-                    .filter(|(_, kind)| {
-                        matches!(kind, EventKind::Create(_) | EventKind::Modify(_))
-                    })
+                    .filter(|(_, kind)| matches!(kind, EventKind::Create(_) | EventKind::Modify(_)))
                     .filter_map(|(path, _)| fs::canonicalize(path).ok())
                     .collect();
 
@@ -318,27 +320,31 @@ fn accumulate(pending: &mut HashMap<PathBuf, EventKind>, event: &notify::Event) 
             // "From" carries the old path → treat as removal.
             RenameMode::From => {
                 if let Some(old) = event.paths.first()
-                    && is_markdown(old) {
-                        pending.insert(old.clone(), EventKind::Remove(RemoveKind::File));
-                    }
+                    && is_markdown(old)
+                {
+                    pending.insert(old.clone(), EventKind::Remove(RemoveKind::File));
+                }
             }
             // "To" carries the new path → treat as creation.
             RenameMode::To => {
                 if let Some(new) = event.paths.first()
-                    && is_markdown(new) {
-                        pending.insert(new.clone(), EventKind::Create(CreateKind::File));
-                    }
+                    && is_markdown(new)
+                {
+                    pending.insert(new.clone(), EventKind::Create(CreateKind::File));
+                }
             }
             // "Both" carries [old, new] in a single event.
             RenameMode::Both => {
                 if let Some(old) = event.paths.first()
-                    && is_markdown(old) {
-                        pending.insert(old.clone(), EventKind::Remove(RemoveKind::File));
-                    }
+                    && is_markdown(old)
+                {
+                    pending.insert(old.clone(), EventKind::Remove(RemoveKind::File));
+                }
                 if let Some(new) = event.paths.get(1)
-                    && is_markdown(new) {
-                        pending.insert(new.clone(), EventKind::Create(CreateKind::File));
-                    }
+                    && is_markdown(new)
+                {
+                    pending.insert(new.clone(), EventKind::Create(CreateKind::File));
+                }
             }
             // "Any" / "Other" – direction unknown. If the file exists now
             // treat it as a creation; otherwise as a removal.

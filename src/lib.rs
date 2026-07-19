@@ -133,7 +133,10 @@ impl IndexedPaths {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.read().expect("indexed-paths lock poisoned").is_empty()
+        self.0
+            .read()
+            .expect("indexed-paths lock poisoned")
+            .is_empty()
     }
 }
 
@@ -330,7 +333,9 @@ impl TerrainServer {
     )]
     async fn search(&self, Parameters(params): Parameters<SearchParams>) -> Result<String, String> {
         let options = SearchOptions {
-            limit: params.limit.unwrap_or_else(|| SearchOptions::default().limit),
+            limit: params
+                .limit
+                .unwrap_or_else(|| SearchOptions::default().limit),
             ..SearchOptions::default()
         };
         let hits = self
@@ -427,9 +432,10 @@ impl TerrainServer {
 
         for (name, tool_config) in &config.tools {
             if let Some(desc) = &tool_config.description
-                && let Some(route) = router.map.get_mut(name.as_str()) {
-                    route.attr.description = Some(desc.clone().into());
-                }
+                && let Some(route) = router.map.get_mut(name.as_str())
+            {
+                route.attr.description = Some(desc.clone().into());
+            }
         }
 
         let instructions = config.instructions.clone().unwrap_or_else(|| {
@@ -581,8 +587,7 @@ impl KnowledgeProvider for TraverzeProvider {
             bail!("access denied: path is not in the index");
         }
 
-        let content =
-            fs::read_to_string(&canonical).context("failed to read file")?;
+        let content = fs::read_to_string(&canonical).context("failed to read file")?;
 
         Ok(FileContent {
             path: canonical.to_string_lossy().into_owned(),
@@ -595,11 +600,7 @@ impl KnowledgeProvider for TraverzeProvider {
         // what keeps offset paging stable across calls.
         let all = self.engine.list()?;
         let total = all.len();
-        let paths = all
-            .into_iter()
-            .skip(opts.offset)
-            .take(opts.limit)
-            .collect();
+        let paths = all.into_iter().skip(opts.offset).take(opts.limit).collect();
         Ok(FileList {
             total,
             offset: opts.offset,

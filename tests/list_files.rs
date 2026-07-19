@@ -55,14 +55,20 @@ async fn list_files_pages_with_limit_and_offset() {
     let all = provider.list_files(&ListOptions::default()).await.unwrap();
 
     let page = provider
-        .list_files(&ListOptions { limit: 2, offset: 0 })
+        .list_files(&ListOptions {
+            limit: 2,
+            offset: 0,
+        })
         .await
         .unwrap();
     assert_eq!(page.total, 5);
     assert_eq!(page.paths, all.paths[0..2]);
 
     let page = provider
-        .list_files(&ListOptions { limit: 2, offset: 4 })
+        .list_files(&ListOptions {
+            limit: 2,
+            offset: 4,
+        })
         .await
         .unwrap();
     assert_eq!(page.offset, 4);
@@ -81,7 +87,10 @@ async fn list_files_pages_with_limit_and_offset() {
 
     // limit 0 is the "just give me the count" call.
     let page = provider
-        .list_files(&ListOptions { limit: 0, offset: 0 })
+        .list_files(&ListOptions {
+            limit: 0,
+            offset: 0,
+        })
         .await
         .unwrap();
     assert_eq!(page.total, 5);
@@ -90,10 +99,7 @@ async fn list_files_pages_with_limit_and_offset() {
 
 /// Parse the JSON payload out of a `tools/call` response.
 fn tool_payload(response: &Value) -> Value {
-    assert!(
-        response["error"].is_null(),
-        "unexpected error: {response}"
-    );
+    assert!(response["error"].is_null(), "unexpected error: {response}");
     assert_ne!(response["result"]["isError"], json!(true));
     serde_json::from_str(response["result"]["content"][0]["text"].as_str().unwrap()).unwrap()
 }
@@ -123,7 +129,9 @@ async fn list_files_tool_serves_paged_json() {
 
     // A listed path feeds straight into read_file.
     let path = payload["paths"][0].as_str().unwrap().to_string();
-    let response = client.call_tool(3, "read_file", json!({"path": path})).await;
+    let response = client
+        .call_tool(3, "read_file", json!({"path": path}))
+        .await;
     assert!(response["error"].is_null(), "unexpected error: {response}");
     assert_ne!(response["result"]["isError"], json!(true));
     let text = response["result"]["content"][0]["text"].as_str().unwrap();
