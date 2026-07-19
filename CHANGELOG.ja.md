@@ -17,6 +17,7 @@
 - 自前の HTTP サーバー（`axum`/`hyper` など）に組み込める `rmcp` の Streamable HTTP tower `Service` を構築する `streamable_http_service` ヘルパーと `streamable-http` フィーチャーを追加
 - 埋め込みホストが自身の name/version で名乗れるよう、MCP `serverInfo` の name/version を上書きする config の `[server]` テーブルを追加
 - ツール呼び出しごとの入力（引数）と結果をハンドラ層で観測する `ToolCallObserver` トレイト・`ToolCallEvent`・`TerrainServer::with_observer` を追加。組み込みホストが MCP 入出力を自前の UI に表示できるように。フックはトランスポート（stdio・プロセス内ストリーム・Streamable HTTP）を問わず発火
+- インデックス済み全ファイルの絶対パスをソート済みで一覧する `list_files` MCP ツールを追加。`limit` / `offset` でページングでき（`limit: 0` で総件数のみ取得）、検索キーワードが思いつかなくても MCP ホストがどんな文書が存在するかを把握できるように。返されたパスはそのまま `read_file` に渡せる。`KnowledgeProvider` トレイトには必須メソッド `list_files` と新しい契約型 `ListOptions` / `FileList` が加わる（外部の provider 実装にとっては破壊的変更）
 
 ### Changed
 
