@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-11
+
 ### Added
 
 - `KnowledgeProvider` trait and its contract types (`SearchHit`, `SearchOptions`, `FileContent`), owned by terrain so the tool surface is decoupled from the underlying search engine
@@ -81,7 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional `cli` feature flag for `clap` dependency
 - Apache 2.0 and MIT dual license
 
-[unreleased]: https://github.com/kyow/terrain/compare/v0.2.2...HEAD
+[unreleased]: https://github.com/kyow/terrain/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/kyow/terrain/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/kyow/terrain/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/kyow/terrain/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kyow/terrain/compare/v0.1.0...v0.2.0

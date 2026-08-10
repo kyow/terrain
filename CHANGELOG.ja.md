@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-11
+
 ### Added
 
 - 検索エンジンからツール契約を切り離すための `KnowledgeProvider` トレイトと、terrain が所有する契約型（`SearchHit` / `SearchOptions` / `FileContent`）を追加
@@ -81,7 +83,8 @@
 - `clap` 依存をオプショナルにする `cli` フィーチャーフラグ
 - Apache 2.0 および MIT デュアルライセンス
 
-[unreleased]: https://github.com/kyow/terrain/compare/v0.2.2...HEAD
+[unreleased]: https://github.com/kyow/terrain/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/kyow/terrain/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/kyow/terrain/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/kyow/terrain/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kyow/terrain/compare/v0.1.0...v0.2.0

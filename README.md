@@ -32,7 +32,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-terrain = { version = "0.2", default-features = false }
+terrain = { version = "0.3", default-features = false }
 ```
 
 Disabling default features drops the CLI dependencies (`clap`, `notify`, `axum`) and the bundled `traverze` provider, leaving a lean library where you bring your own search engine. Opt back in per feature as needed:
@@ -45,10 +45,12 @@ The library exposes the following public API:
 - `Config` — Load and parse a TOML configuration file.
 - `KnowledgeProvider` — The trait backing the `search` / `read_file` / `list_files` tools, with the `SearchHit`, `SearchOptions`, `FileContent`, `ListOptions`, and `FileList` types. Implement it to plug in your own search engine and access-control policy.
 - `TerrainServer` — The MCP server handler, ready to be plugged into an `rmcp` transport. Constructed with `TerrainServer::new(provider, &config)`, where `provider` is an `Arc<dyn KnowledgeProvider>`.
+- `ToolCallObserver` / `ToolCallEvent` — Observe every tool call (arguments, outcome, and elapsed time) at the handler layer, so an embedding host can surface MCP traffic in its own UI. Attach one with `TerrainServer::with_observer(observer)`. The hook fires whichever transport serves the server, and is called synchronously on the request path — hand the event off rather than blocking.
 - `IndexedPaths` — A cloneable, shared set of paths currently registered in the index. The bundled provider consults this set to authorize `read_file` reads, so the embedding app controls access by registering paths.
 - `serve_io` — Serve the server over any `rmcp` I/O transport (stdio, a pipe, or a socket).
-- `streamable_http_service` *(feature `streamable-http`)* — Build an `rmcp` Streamable HTTP tower `Service` to mount into your own HTTP server (e.g. `axum`/`hyper`).
+- `streamable_http_service` *(feature `streamable-http`)* — Build an `rmcp` Streamable HTTP tower `Service` to mount into your own HTTP server (e.g. `axum`/`hyper`). Takes a `StreamableHttpServerConfig` (also re-exported) controlling session/SSE behaviour and inbound `Host`/`Origin` validation.
 - `TraverzeProvider` / `resolve_dir` / `build_engine` *(feature `bundled-provider`)* — The reference provider backed by `traverze`, plus directory-resolution and engine-initialization helpers. `build_engine` resets the given index directory and rebuilds it from scratch, so the index only ever reflects the files passed in.
+- `rmcp` *(re-export)* — The `rmcp` crate terrain serves with, re-exported so an embedding app can construct transports and other `rmcp` values without taking its own `rmcp` dependency, keeping the version aligned.
 
 The library does not scan directories or watch the filesystem on its own — embedding apps decide which files to register and when to re-index. See [src/main.rs](src/main.rs) for a reference integration that walks a directory of `.md` files and keeps the index in sync via [`notify`](https://crates.io/crates/notify).
 
