@@ -32,7 +32,7 @@ cargo install terrain
 
 ```toml
 [dependencies]
-terrain = { version = "0.2", default-features = false }
+terrain = { version = "0.3", default-features = false }
 ```
 
 デフォルトフィーチャーを無効にすると、CLI が使用する依存（`clap`・`notify`・`axum`）と同梱の `traverze` プロバイダが外れ、自前の検索エンジンを持ち込む前提の軽量なライブラリになります。必要に応じてフィーチャー単位で有効化できます。
@@ -45,10 +45,12 @@ terrain = { version = "0.2", default-features = false }
 - `Config` — TOML 設定ファイルの読み込みとパース。
 - `KnowledgeProvider` — `search` / `read_file` / `list_files` ツールを支える trait。`SearchHit`・`SearchOptions`・`FileContent`・`ListOptions`・`FileList` 型を伴います。これを実装することで、独自の検索エンジンとアクセス制御ポリシーを差し込めます。
 - `TerrainServer` — `rmcp` のトランスポートに組み込める MCP サーバーハンドラ。`TerrainServer::new(provider, &config)`（`provider` は `Arc<dyn KnowledgeProvider>`）で構築します。
+- `ToolCallObserver` / `ToolCallEvent` — ツール呼び出しごとの引数・結果・所要時間をハンドラ層で観測し、組み込みホストが MCP の入出力を自前の UI に表示できるようにします。`TerrainServer::with_observer(observer)` で登録します。フックはどのトランスポートで給仕しても発火し、リクエストパス上で同期的に呼ばれるため、実装はブロックせずイベントを受け渡すだけにしてください。
 - `IndexedPaths` — 現在インデックスに登録されているパスを保持する、クローン可能で共有可能な集合。同梱プロバイダはこの集合を参照して `read_file` の読み取りを認可するため、組み込みアプリ側はパスを登録することでアクセスを制御します。
 - `serve_io` — 任意の `rmcp` I/O トランスポート（stdio・パイプ・ソケット）上でサーバーを給仕します。
-- `streamable_http_service` *(`streamable-http` フィーチャー)* — 自前の HTTP サーバー（`axum`/`hyper` など）に組み込める `rmcp` の Streamable HTTP tower `Service` を構築します。
+- `streamable_http_service` *(`streamable-http` フィーチャー)* — 自前の HTTP サーバー（`axum`/`hyper` など）に組み込める `rmcp` の Streamable HTTP tower `Service` を構築します。セッション・SSE の挙動と受信時の `Host`/`Origin` 検証を制御する `StreamableHttpServerConfig`（こちらも再エクスポート）を引数に取ります。
 - `TraverzeProvider` / `resolve_dir` / `build_engine` *(`bundled-provider` フィーチャー)* — `traverze` を基盤とするリファレンスプロバイダと、ディレクトリ解決・エンジン初期化のためのユーティリティ。`build_engine` は渡されたインデックスディレクトリをリセットしてゼロから再構築するため、インデックスは常に渡したファイルのみを反映します。
+- `rmcp` *(再エクスポート)* — terrain が給仕に使っている `rmcp` クレートをそのまま再エクスポートします。組み込みアプリは `rmcp` への独自の依存を追加せずにトランスポートなどの `rmcp` の値を構築でき、バージョンのずれも避けられます。
 
 ライブラリ自体はディレクトリの走査やファイルシステムの監視を行いません。どのファイルをいつ登録・再インデックスするかは組み込みアプリが決定します。`.md` ファイルのディレクトリを走査し、[`notify`](https://crates.io/crates/notify) でインデックスを同期し続ける統合例については [src/main.rs](src/main.rs) を参照してください。
 
